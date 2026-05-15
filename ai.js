@@ -111,30 +111,94 @@ window.renderAIResults=function(a){
   const tc=r.verdict==='ผ่าน'?'#22c55e':'#ef4444';
   const tierC={S:'#22c55e',A:'#06b6d4',B:'#f59e0b',C:'#ef4444',Reject:'#ef4444'};
   const tierBg=tierC[r.tier]||'#94a3b8';
-  const bar=(l,v,mx)=>{const p=Math.round(v/mx*100);return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.82rem"><span style="width:160px;color:var(--text2)">${l}</span><div style="flex:1;height:6px;background:var(--border2);border-radius:3px;overflow:hidden"><div style="height:100%;width:${p}%;background:${p>=70?'var(--green)':p>=40?'var(--gold)':'var(--red)'};border-radius:3px"></div></div><span style="width:40px;text-align:right;font-weight:700;color:${p>=70?'var(--green)':p>=40?'var(--gold)':'var(--red)'}">${v}/${mx}</span></div>`};
-  const sk=r.skills||{};
+  const tierEmoji={S:'🏆',A:'⭐',B:'👍',C:'⚠️',Reject:'❌'};
+  const sc=r.scores||{};const es=r.executive_summary||{};const id=r.identity||{};
+  const exp=r.experience||{};const pot=r.potential||{};const jf=r.job_fit||{};const sk=r.skills||{};
+  const bar=(l,v,mx)=>{const p=Math.round(v/mx*100);return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:.82rem"><span style="width:140px;color:var(--text2);flex-shrink:0">'+l+'</span><div style="flex:1;height:8px;background:var(--border2);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+p+'%;background:'+(p>=70?'var(--green)':p>=40?'var(--gold)':'var(--red)')+';border-radius:4px"></div></div><span style="width:44px;text-align:right;font-weight:700;color:'+(p>=70?'var(--green)':p>=40?'var(--gold)':'var(--red)')+'">'+v+'/'+mx+'</span></div>'};
   const skillBar=(l,obj)=>obj?bar(l,obj.score||0,10):'';
-  const sc=r.scores||{};
-  const section=(icon,title,html)=>`<details style="margin-bottom:8px;border:1px solid var(--border2);border-radius:var(--r2);overflow:hidden"><summary style="padding:10px 14px;cursor:pointer;font-weight:600;font-size:.88rem;background:var(--bg2)">${icon} ${title}</summary><div style="padding:14px;font-size:.85rem;line-height:1.7;color:var(--text2)">${html}</div></details>`;
-  const id=r.identity||{};const exp=r.experience||{};const pot=r.potential||{};const jf=r.job_fit||{};const es=r.executive_summary||{};
-  return `<div style="margin-bottom:20px;border:2px solid ${tc}44;border-radius:var(--r);overflow:hidden">
-    <div style="background:${tc}15;padding:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div style="font-weight:800;font-size:1.1rem">🤖 AI Resume Analysis</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <span style="background:${tierBg}22;color:${tierBg};padding:4px 14px;border-radius:100px;font-size:.85rem;font-weight:700">${r.tier} Tier</span>
-        <span style="background:${tc}22;color:${tc};padding:4px 14px;border-radius:100px;font-size:.85rem;font-weight:700">${r.verdict} — ${sc.total||0}/100</span>
-      </div>
-    </div>
-    <div style="padding:16px">
-      ${section('👤','สรุปตัวตนผู้สมัคร',`<p><b>สายงาน:</b> ${id.type||'-'}</p><p><b>จุดแข็ง:</b> ${id.strengths||'-'}</p><p><b>ประสบการณ์เด่น:</b> ${id.top_experience||'-'}</p><p><b>เหมาะกับองค์กร:</b> ${id.org_fit||'-'}</p><p><b>ระดับ:</b> ${id.level||'-'}</p>`)}
-      ${section('💼','ประสบการณ์ทำงาน',`<p>${exp.history||'-'}</p><p><b>ความเกี่ยวข้อง:</b> ${exp.relevance||'-'}</p><p><b>หลักฐาน:</b> ${exp.evidence||'-'}</p><p><b>ความจริงแท้:</b> ${exp.authenticity||'-'}</p><p><b>Career Path:</b> ${exp.progression||'-'}</p>`)}
-      ${section('🎯','Skill Assessment',`${skillBar('Hard Skills',sk.hard)}${skillBar('Soft Skills',sk.soft)}${skillBar('Technical',sk.technical)}${skillBar('Leadership',sk.leadership)}${skillBar('Problem Solving',sk.problem_solving)}${skillBar('Communication',sk.communication)}${skillBar('Analytical',sk.analytical)}${skillBar('Creativity',sk.creativity)}`)}
-      ${section('⭐','ความ "มีของ"',`<p><b>ความพิเศษ:</b> ${pot.special||'-'}</p><p><b>สัญญาณคนเก่ง:</b> ${pot.genius_signal||'-'}</p><p><b>ความสามารถหายาก:</b> ${pot.rare_ability||'-'}</p><p><b>Ownership:</b> ${pot.ownership||'-'}</p><p><b>Growth Mindset:</b> ${pot.growth_mindset||'-'}</p>`)}
-      ${r.red_flags?.length?section('🚩','Red Flags',`<ul style="padding-left:18px">${r.red_flags.map(f=>'<li style="margin-bottom:4px;color:var(--red)">'+f+'</li>').join('')}</ul>`):''}
-      ${section('📊','ความเหมาะกับตำแหน่ง',`<p><b>Match:</b> <span style="font-size:1.2rem;font-weight:800;color:${(jf.match_pct||0)>=70?'var(--green)':'var(--gold)'}">${jf.match_pct||0}%</span></p><p><b>จุดที่ตรง:</b> ${jf.best_match||'-'}</p><p><b>จุดที่ขาด:</b> ${jf.gaps||'-'}</p><p><b>ต้องสัมภาษณ์เพิ่ม:</b> ${jf.interview_topics||'-'}</p><p><b>ควรเริ่มจาก:</b> ${jf.starting_role||'-'}</p>`)}
-      ${section('📈','คะแนนรวม',`${bar('ประสบการณ์ตรงสาย',sc.experience||0,20)}${bar('ผลงานที่พิสูจน์ได้',sc.proven_results||0,20)}${bar('Skill ตรงตำแหน่ง',sc.skill_match||0,20)}${bar('ศักยภาพเติบโต',sc.potential||0,20)}${bar('ความน่าเชื่อถือ',sc.reliability||0,10)}${bar('เหมาะกับทีม',sc.team_fit||0,10)}<div style="text-align:right;font-size:1.1rem;font-weight:800;margin-top:8px;color:${(sc.total||0)>=70?'var(--green)':'var(--gold)'}">รวม: ${sc.total||0}/100</div>`)}
-      ${r.interview_questions?.length?section('❓','คำถามสัมภาษณ์ 10 ข้อ',`<ol style="padding-left:18px">${r.interview_questions.map(q=>'<li style="margin-bottom:6px">'+q+'</li>').join('')}</ol>`):''}
-      ${section('📋','สรุปสำหรับผู้บริหาร',`<p><b>ควรสัมภาษณ์:</b> <span style="font-weight:700;color:${es.should_interview?'var(--green)':'var(--red)'}">${es.should_interview?'✅ ใช่':'❌ ไม่'}</span></p><p><b>เหตุผล:</b> ${es.reason||'-'}</p><p><b>ความเสี่ยง:</b> ${es.risk||'-'}</p><p><b>ลำดับ:</b> ${es.ranking_hint||'-'}</p>`)}
-    </div>
-  </div>`;
+  const sec=(icon,title,html,open)=>'<details'+(open?' open':'')+' style="margin-bottom:8px;border:1px solid var(--border2);border-radius:var(--r2);overflow:hidden"><summary style="padding:12px 14px;cursor:pointer;font-weight:600;font-size:.88rem;background:var(--bg2)">'+icon+' '+title+'</summary><div style="padding:14px;font-size:.85rem;line-height:1.8;color:var(--text2)">'+html+'</div></details>';
+  const row=(label,val,color)=>val&&val!=='-'?'<div style="display:flex;gap:8px;margin-bottom:6px"><span style="color:var(--text3);min-width:110px;flex-shrink:0">'+label+'</span><span style="color:'+(color||'var(--text)')+';font-weight:500">'+val+'</span></div>':'';
+  const matchClr=(jf.match_pct||0)>=70?'var(--green)':(jf.match_pct||0)>=40?'var(--gold)':'var(--red)';
+  const totalClr=(sc.total||0)>=70?'var(--green)':(sc.total||0)>=40?'var(--gold)':'var(--red)';
+
+  return '<div style="margin-bottom:20px;border:2px solid '+tc+'44;border-radius:var(--r);overflow:hidden">'
+    +'<div style="background:linear-gradient(135deg,'+tierBg+'18,'+tc+'12);padding:20px;text-align:center">'
+    +'<div style="font-size:2.5rem;margin-bottom:4px">'+(tierEmoji[r.tier]||'🤖')+'</div>'
+    +'<div style="display:inline-block;background:'+tierBg+'22;color:'+tierBg+';padding:6px 24px;border-radius:100px;font-size:1.2rem;font-weight:800;margin-bottom:8px;border:2px solid '+tierBg+'44">'+r.tier+' Tier</div>'
+    +'<div style="font-size:2rem;font-weight:900;color:'+tc+';margin:8px 0">'+(sc.total||0)+'<span style="font-size:1rem;color:var(--text3)">/100</span></div>'
+    +'<div style="font-size:.9rem;font-weight:600;color:'+tc+'">'+(r.verdict==='ผ่าน'?'✅ ผ่านการคัดกรอง':'❌ ไม่ผ่านการคัดกรอง')+'</div>'
+    +(r.tier_reason?'<div style="margin-top:8px;font-size:.82rem;color:var(--text2);max-width:500px;margin-left:auto;margin-right:auto">💡 '+r.tier_reason+'</div>':'')
+    +'</div><div style="padding:16px">'
+
+    +sec('📋','สรุปสำหรับผู้บริหาร — ควรเรียกสัมภาษณ์?',
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px;background:'+(es.should_interview?'rgba(34,197,94,.08)':'rgba(239,68,68,.08)')+';border-radius:var(--r2);border:1px solid '+(es.should_interview?'rgba(34,197,94,.2)':'rgba(239,68,68,.2)')+'">'
+      +'<span style="font-size:2rem">'+(es.should_interview?'✅':'❌')+'</span>'
+      +'<div><div style="font-weight:700;font-size:1rem;color:'+(es.should_interview?'var(--green)':'var(--red)')+'">'+(es.should_interview?'ควรเรียกสัมภาษณ์':'ไม่แนะนำให้สัมภาษณ์')+'</div>'
+      +'<div style="font-size:.82rem;color:var(--text2);margin-top:2px">'+(es.reason||'')+'</div></div></div>'
+      +row('🎯 ลำดับ',es.ranking_hint,'var(--accent)')
+      +row('⚠️ ความเสี่ยง',es.risk,'var(--gold)')
+    ,true)
+
+    +sec('🎯','ความเหมาะกับตำแหน่ง — Match '+(jf.match_pct||0)+'%',
+      '<div style="text-align:center;margin-bottom:16px"><div style="display:inline-flex;width:90px;height:90px;border-radius:50%;border:5px solid '+matchClr+';align-items:center;justify-content:center"><span style="font-size:1.6rem;font-weight:900;color:'+matchClr+'">'+(jf.match_pct||0)+'%</span></div></div>'
+      +row('✅ จุดที่ตรง',jf.best_match,'var(--green)')
+      +row('❌ จุดที่ขาด',jf.gaps,'var(--red)')
+      +row('🔍 สัมภาษณ์เพิ่ม',jf.interview_topics)
+      +row('🚀 ควรเริ่มจาก',jf.starting_role,'var(--accent)')
+    ,true)
+
+    +sec('📊','คะแนนรวม 6 ด้าน — '+(sc.total||0)+'/100',
+      bar('🏢 ประสบการณ์ตรงสาย',sc.experience||0,20)
+      +bar('🏆 ผลงานพิสูจน์ได้',sc.proven_results||0,20)
+      +bar('🎯 Skill ตรงตำแหน่ง',sc.skill_match||0,20)
+      +bar('🚀 ศักยภาพเติบโต',sc.potential||0,20)
+      +bar('🤝 ความน่าเชื่อถือ',sc.reliability||0,10)
+      +bar('👥 เหมาะกับทีม',sc.team_fit||0,10)
+      +'<div style="text-align:right;font-size:1.2rem;font-weight:900;margin-top:12px;padding-top:12px;border-top:1px solid var(--border2);color:'+totalClr+'">รวม: '+(sc.total||0)+'/100</div>'
+    ,true)
+
+    +sec('👤','สรุปตัวตนผู้สมัคร — '+(id.level||''),
+      row('💼 สายงาน',id.type)+row('💪 จุดแข็ง',id.strengths,'var(--green)')
+      +row('🌟 ประสบการณ์เด่น',id.top_experience,'var(--accent)')
+      +row('🏢 เหมาะกับองค์กร',id.org_fit)+row('📊 ระดับ',id.level,'var(--gold)')
+    )
+
+    +sec('⭐','ความ "มีของ" — สัญญาณคนเก่งจริง',
+      row('✨ ความพิเศษ',pot.special,'var(--gold)')
+      +row('🧠 สัญญาณคนเก่ง',pot.genius_signal,'var(--accent)')
+      +row('💎 ความสามารถหายาก',pot.rare_ability,'var(--green)')
+      +row('🔥 เจ้าของงาน',pot.ownership)
+      +row('📈 Growth Mindset',pot.growth_mindset)
+      +row('⚡ โอกาสโตเร็ว',pot.growth_speed,'var(--accent)')
+    )
+
+    +sec('💼','ประสบการณ์ทำงาน',
+      '<div style="margin-bottom:12px;padding:10px;background:var(--bg2);border-radius:var(--r2)">'+(exp.history||'-')+'</div>'
+      +row('🔗 ความเกี่ยวข้อง',exp.relevance)
+      +row('📄 หลักฐานผลงาน',exp.evidence)
+      +row('🔍 ทำจริงหรือคำสวย',exp.authenticity)
+      +row('📈 Career Path',exp.progression)
+    )
+
+    +sec('🎯','Skill Assessment — 8 ด้าน',
+      skillBar('💻 Hard Skills',sk.hard)+skillBar('🤝 Soft Skills',sk.soft)
+      +skillBar('⚙️ Technical',sk.technical)+skillBar('👑 Leadership',sk.leadership)
+      +skillBar('🧩 Problem Solving',sk.problem_solving)+skillBar('💬 Communication',sk.communication)
+      +skillBar('📊 Analytical',sk.analytical)+skillBar('🎨 Creativity',sk.creativity)
+      +(sk.hard?.detail?'<div style="margin-top:12px;font-size:.8rem;color:var(--text3);border-top:1px solid var(--border2);padding-top:10px">'
+        +(sk.hard?.detail?'<b>Hard:</b> '+sk.hard.detail+'<br>':'')
+        +(sk.soft?.detail?'<b>Soft:</b> '+sk.soft.detail+'<br>':'')
+        +(sk.technical?.detail?'<b>Tech:</b> '+sk.technical.detail+'':'')
+      +'</div>':'')
+    )
+
+    +(r.red_flags?.length?sec('🚩','Red Flags — จุดที่ต้องระวัง ('+r.red_flags.length+')',
+      r.red_flags.map(f=>'<div style="display:flex;gap:8px;margin-bottom:8px;padding:8px 12px;background:rgba(239,68,68,.06);border-radius:var(--r2);border-left:3px solid var(--red)"><span style="color:var(--red)">⚠️</span><span>'+f+'</span></div>').join('')
+    ):'')
+
+    +(r.interview_questions?.length?sec('❓','คำถามสัมภาษณ์ที่แนะนำ — '+r.interview_questions.length+' ข้อ',
+      r.interview_questions.map((q,i)=>'<div style="display:flex;gap:10px;margin-bottom:10px;padding:10px 12px;background:var(--bg2);border-radius:var(--r2)"><span style="color:var(--accent);font-weight:700;flex-shrink:0">'+(i+1)+'.</span><span>'+q+'</span></div>').join('')
+    ):'')
+
+    +'</div></div>';
 };
