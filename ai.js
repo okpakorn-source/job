@@ -1,9 +1,9 @@
-// ─── AI Resume Analyzer v4 — Vision-based ──────────
+// ─── AI Resume Analyzer v5 ──────────
 if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 window.setAIKey=function(){
   const key=prompt('กรุณาใส่ OpenAI API Key:\n(จะถูกบันทึกไว้ในเครื่องนี้ กรอกครั้งเดียว)',localStorage.getItem('openai_key')||'');
-  if(key){localStorage.setItem('openai_key',key.trim());toast('บันทึก API Key เรียบร้อย ✅ (จำไว้ถาวร)')}
+  if(key){localStorage.setItem('openai_key',key.trim());toast('บันทึก API Key เรียบร้อย ✅')}
 };
 
 async function pdfToImages(pdfBlob,maxPages){
@@ -23,68 +23,26 @@ async function pdfToImages(pdfBlob,maxPages){
   return images;
 }
 
+const TOP15_UNI = [
+  "จุฬาลงกรณ์","Chulalongkorn",
+  "มหิดล","Mahidol",
+  "เชียงใหม่","Chiang Mai",
+  "ธรรมศาสตร์","Thammasat",
+  "เกษตรศาสตร์","Kasetsart",
+  "ขอนแก่น","Khon Kaen",
+  "สงขลานครินทร์","Prince of Songkla",
+  "ลาดกระบัง","Ladkrabang","KMITL",
+  "พระจอมเกล้าธนบุรี","Thonburi","KMUTT",
+  "พระจอมเกล้าพระนครเหนือ","North Bangkok","KMUTNB",
+  "ศรีนครินทรวิโรฒ","Srinakharinwirot",
+  "บูรพา","Burapha",
+  "แม่ฟ้าหลวง","Mae Fah Luang",
+  "สุรนารี","Suranaree",
+  "ศิลปากร","Silpakorn"
+];
+
 function buildPrompt(jobTitle,jobDesc,jobReq){
-  return `คุณคือผู้เชี่ยวชาญด้าน HR ระดับมืออาชีพ อ่าน Resume จากภาพแล้ววิเคราะห์อย่างละเอียด
-
-ตำแหน่งที่สมัคร: "${jobTitle}"
-${jobDesc?'ลักษณะงาน: '+jobDesc:''}
-${jobReq?'คุณสมบัติ: '+jobReq:''}
-
-ตอบเป็น JSON ตามโครงสร้างนี้เท่านั้น (ห้ามตอบนอกรูปแบบ):
-{
-  "profile": {
-    "name": "ชื่อ-นามสกุล (ถ้าอ่านได้)",
-    "gender": "ชาย/หญิง/ไม่ระบุ",
-    "age": 0,
-    "age_note": "อายุประมาณจากปีเกิดหรือปีจบการศึกษา ถ้าไม่มีข้อมูลใส่ 0",
-    "university": "ชื่อมหาวิทยาลัย",
-    "is_top20": false,
-    "top20_note": "อธิบายว่าเป็น Top 20 ไทยหรือไม่ (จุฬา มธ. มก. มข. มช. มอ. มน. มจพ. พระจอมเกล้าลาดกระบัง พระจอมเกล้าธนบุรี ศิลปากร ขอนแก่น แม่ฟ้าหลวง บูรพา ศรีนครินทรฯ ม.รังสิต ม.กรุงเทพ ม.อัสสัมชัญ ม.หอการค้า ม.เกษตรศาสตร์)",
-    "degree": "ป.ตรี/ป.โท/ป.เอก/อื่นๆ",
-    "major": "สาขาวิชา",
-    "gpa": 0.0,
-    "gpa_note": "GPA จาก Resume ถ้าไม่ระบุใส่ 0"
-  },
-  "experience": {
-    "total_years": 0,
-    "summary": "สรุปประสบการณ์ทำงาน 2-3 ประโยค",
-    "companies": "บริษัทที่เคยทำงาน",
-    "relevance": "ความเกี่ยวข้องกับตำแหน่งที่สมัคร",
-    "key_achievements": "ผลงานเด่น/ตัวเลขที่พิสูจน์ได้",
-    "is_real": "ทำจริงหรือเขียนสวย — วิเคราะห์ตรงๆ"
-  },
-  "skills": {
-    "hard_skills": "ทักษะเฉพาะทาง (เช่น Programming, Design, Marketing)",
-    "soft_skills": "ทักษะด้านคน (Communication, Leadership, Teamwork)",
-    "tools": "เครื่องมือที่ใช้ได้ (Software, Platform)",
-    "languages": "ภาษาที่ใช้ได้ (ไทย อังกฤษ อื่นๆ)"
-  },
-  "scores": {
-    "university": {"score": 0, "max": 15, "note": "Top 20 = 12-15, มหาลัยดี = 8-11, ทั่วไป = 4-7, ไม่ระบุ = 3"},
-    "gpa": {"score": 0, "max": 10, "note": "3.5+ = 9-10, 3.0-3.49 = 6-8, 2.5-2.99 = 4-5, <2.5 = 1-3, ไม่ระบุ = 3"},
-    "experience": {"score": 0, "max": 25, "note": "5ปี+ ตรงสาย = 20-25, 3-5ปี = 13-19, 1-3ปี = 7-12, <1ปี = 1-6"},
-    "skill_match": {"score": 0, "max": 20, "note": "ตรงตำแหน่งมาก = 16-20, ค่อนข้างตรง = 10-15, พอได้ = 5-9, ไม่ตรง = 1-4"},
-    "achievements": {"score": 0, "max": 15, "note": "มีผลงานพิสูจน์ชัด = 12-15, พอมี = 7-11, น้อย = 1-6"},
-    "potential": {"score": 0, "max": 15, "note": "มีศักยภาพสูง = 12-15, ปานกลาง = 7-11, ต่ำ = 1-6"},
-    "total": 0
-  },
-  "red_flags": ["จุดที่ต้องระวัง"],
-  "strengths": ["จุดแข็ง 3-5 ข้อ"],
-  "tier": "S",
-  "tier_reason": "เหตุผลที่จัดอยู่ Tier นี้",
-  "verdict": "ผ่าน",
-  "should_interview": true,
-  "interview_reason": "เหตุผลที่ควร/ไม่ควรเรียกสัมภาษณ์",
-  "interview_questions": ["คำถามสัมภาษณ์ 5 ข้อที่ควรถาม"],
-  "one_line_summary": "สรุป 1 ประโยคว่าคนนี้เป็นใคร เก่งอะไร"
-}
-
-กฎสำคัญ:
-1. score ทุกตัวต้องเป็นตัวเลข ห้ามเป็น string
-2. total = ผลรวมทุก score (เต็ม 100)
-3. tier: S(80-100) A(65-79) B(50-64) C(35-49) Reject(<35)
-4. ถ้าไม่มีข้อมูลบอกตรงๆว่า "ไม่ระบุใน Resume"
-5. อย่าชมเกินจริง วิเคราะห์ตามหลักฐานที่เห็นเท่านั้น`;
+  return 'คุณคือ HR มืออาชีพ อ่าน Resume จากภาพ วิเคราะห์ 4 หัวข้อหลัก ตอบเป็น JSON เท่านั้น\n\nตำแหน่งที่สมัคร: "'+jobTitle+'"\n'+(jobDesc?'ลักษณะงาน: '+jobDesc+'\n':'')+(jobReq?'คุณสมบัติ: '+jobReq+'\n':'')+'\nตอบ JSON นี้:\n{\n  "name": "ชื่อ-นามสกุล",\n  "gender": "ชาย/หญิง/ไม่ระบุ",\n  "age": 0,\n  "university": "ชื่อมหาวิทยาลัยที่จบ",\n  "degree": "ป.ตรี/ป.โท/ป.เอก",\n  "major": "สาขาวิชา",\n  "gpa": 0.00,\n  "experience_years": 0,\n  "experience_summary": "สรุปประสบการณ์ 2 ประโยค",\n  "skills": "ทักษะหลักๆ",\n  "strengths": ["จุดแข็ง"],\n  "red_flags": ["จุดที่ต้องระวัง"],\n  "summary": "สรุป 1 ประโยคว่าคนนี้เหมาะกับตำแหน่งนี้ไหม",\n  "interview_questions": ["คำถาม 5 ข้อ"]\n}\n\nกฎ: score ตัวเลขเท่านั้น, gpa เป็นทศนิยม 2 ตำแหน่ง, age เป็นตัวเลข, ถ้าไม่มีข้อมูลใส่ 0';
 }
 
 window.analyzeResume=async function(id,promptId){
@@ -95,20 +53,12 @@ window.analyzeResume=async function(id,promptId){
   if(!promptId){showPromptSelector(id);return}
   const prompts=getPrompts();
   const selPrompt=prompts.find(p=>p.id===promptId)||prompts[0];
-  toast('🤖 กำลังวิเคราะห์ด้วย "'+selPrompt.name+'"... รอ 15-30 วินาที');
+  toast('🤖 กำลังวิเคราะห์... รอ 15-30 วินาที');
   try{
-    console.log('[AI] Downloading:',app.resume_path);
     const {data:blob,error:dlErr}=await sb.storage.from('resumes').download(app.resume_path);
-    if(dlErr||!blob)throw new Error('ดาวน์โหลด PDF ไม่ได้: '+(dlErr?.message||'ไม่พบไฟล์'));
-    console.log('[AI] PDF size:',blob.size,'bytes');
+    if(dlErr||!blob)throw new Error('ดาวน์โหลด PDF ไม่ได้');
     let images;
-    try{
-      images=await pdfToImages(blob,4);
-      console.log('[AI] Rendered',images.length,'pages');
-    }catch(e){
-      console.error('[AI] Render error:',e);
-      throw new Error('ไม่สามารถแปลง PDF เป็นภาพได้: '+e.message);
-    }
+    try{images=await pdfToImages(blob,4);}catch(e){throw new Error('แปลง PDF ไม่ได้: '+e.message);}
     if(!images.length)throw new Error('PDF ไม่มีหน้า');
     const jobTitle=app.jobs?app.jobs.title:'ไม่ระบุ';
     let jobDesc='',jobReq='';
@@ -118,41 +68,56 @@ window.analyzeResume=async function(id,promptId){
       });
       if(jRes.ok){const jd=await jRes.json();if(jd[0]){jobDesc=jd[0].description||'';jobReq=jd[0].requirements||''}}
     }
-    const promptText=selPrompt.content.replace(/\{\{JOB_TITLE\}\}/g,jobTitle).replace(/\{\{JOB_DESC\}\}/g,jobDesc?'ลักษณะงาน: '+jobDesc:'').replace(/\{\{JOB_REQ\}\}/g,jobReq?'คุณสมบัติ: '+jobReq:'');
+    const promptText=selPrompt.content.replace(/\{\{JOB_TITLE\}\}/g,jobTitle).replace(/\{\{JOB_DESC\}\}/g,jobDesc).replace(/\{\{JOB_REQ\}\}/g,jobReq);
     const content=[{type:'text',text:promptText}];
     images.forEach(img=>content.push({type:'image_url',image_url:{url:img,detail:'high'}}));
     const aiRes=await fetch('https://api.openai.com/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
-      body:JSON.stringify({model:'gpt-4o-mini',response_format:{type:'json_object'},max_tokens:4000,messages:[{role:'system',content:'คุณเป็นผู้เชี่ยวชาญด้าน HR วิเคราะห์ Resume ตอบเป็น JSON เท่านั้น ทุก score ต้องเป็นตัวเลข'},{role:'user',content:content}]})
+      body:JSON.stringify({model:'gpt-4o-mini',response_format:{type:'json_object'},max_tokens:3000,messages:[
+        {role:'system',content:'ตอบเป็น JSON เท่านั้น ทุกตัวเลขต้องเป็น number'},
+        {role:'user',content:content}
+      ]})
     });
     if(!aiRes.ok){const e=await aiRes.json();throw new Error(e.error?.message||'OpenAI Error')}
     const aiData=await aiRes.json();
     const raw=aiData.choices[0].message.content;
-    console.log('[AI] Raw response:',raw);
+    console.log('[AI] Raw:',raw);
     const r=JSON.parse(raw);
-    // Calculate total if not provided
-    if(r.scores){
-      let t=0;
-      ['university','gpa','experience','skill_match','achievements','potential'].forEach(k=>{
-        if(r.scores[k]){
-          const s=typeof r.scores[k]==='object'?Number(r.scores[k].score)||0:Number(r.scores[k])||0;
-          t+=s;
-        }
-      });
-      if(!r.scores.total||r.scores.total===0)r.scores.total=t;
+    // Calculate scores locally
+    let uniScore=0;
+    const uniName=(r.university||'').toLowerCase();
+    for(let i=0;i<TOP15_UNI.length;i++){
+      if(uniName.includes(TOP15_UNI[i].toLowerCase())){
+        uniScore=15;break;
+      }
     }
-    const total=r.scores?.total||0;
+    const gpa=Number(r.gpa)||0;
+    let gpaScore=0;
+    if(gpa>=3.80)gpaScore=10;
+    else if(gpa>=3.50)gpaScore=8;
+    else if(gpa>=3.20)gpaScore=6;
+    else if(gpa>=3.00)gpaScore=4;
+    else if(gpa>0)gpaScore=2;
+    const total=uniScore+gpaScore;
+    let tier='C';
+    if(total>=20)tier='S';
+    else if(total>=15)tier='A';
+    else if(total>=10)tier='B';
+    else if(total>=4)tier='C';
+    else tier='Reject';
+    r._uniScore=uniScore;r._gpaScore=gpaScore;r._total=total;r._tier=tier;
+    r._isTop15=uniScore>=15;
+    r._gpaLevel=gpa>=3.80?'เกียรตินิยมอันดับ 1':gpa>=3.50?'เกียรตินิยมอันดับ 2':gpa>=3.20?'ดีมาก':gpa>=3.00?'ดี':gpa>0?'ต่ำกว่าเกณฑ์':'ไม่ระบุ';
     const tierMap={S:'top',A:'strong',B:'average',C:'weak',Reject:'weak'};
     await fetch(SUPABASE_URL+'/rest/v1/applicants?id=eq.'+id,{
       method:'PATCH',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'},
-      body:JSON.stringify({ai_analyzed:true,ai_analyzed_at:new Date().toISOString(),ai_summary:r,ai_score_overall:total,ai_tier:tierMap[r.tier]||'average',ai_recommendation:r.interview_reason||r.one_line_summary||''})
+      body:JSON.stringify({ai_analyzed:true,ai_analyzed_at:new Date().toISOString(),ai_summary:r,ai_score_overall:total,ai_tier:tierMap[tier]||'average',ai_recommendation:r.summary||''})
     });
-    Object.assign(app,{ai_analyzed:true,ai_summary:r,ai_score_overall:total,ai_tier:tierMap[r.tier]||'average'});
-    toast(r.verdict==='ผ่าน'?'✅ ผลวิเคราะห์: ผ่าน ('+total+'/100)':'❌ ผลวิเคราะห์: ไม่ผ่าน ('+total+'/100)');
-    filterApplicants();
-    viewApplicant(id);
+    Object.assign(app,{ai_analyzed:true,ai_summary:r,ai_score_overall:total,ai_tier:tierMap[tier]||'average'});
+    toast('✅ วิเคราะห์เสร็จ: '+tier+' Tier ('+total+'/25)');
+    filterApplicants();viewApplicant(id);
   }catch(err){
     console.error('[AI]',err);
     toast('AI Error: '+err.message,'error');
@@ -162,131 +127,92 @@ window.analyzeResume=async function(id,promptId){
 window.renderAIResults=function(a){
   if(!a.ai_analyzed||!a.ai_summary)return '';
   const r=a.ai_summary;
-  const p=r.profile||{};const ex=r.experience||{};const sk=r.skills||{};const sc=r.scores||{};
-  const tc=r.verdict==='ผ่าน'?'#22c55e':'#ef4444';
+  const tier=r._tier||'C';
+  const total=r._total||0;
   const tierC={S:'#22c55e',A:'#06b6d4',B:'#f59e0b',C:'#ef4444',Reject:'#ef4444'};
-  const tierBg=tierC[r.tier]||'#94a3b8';
+  const tierBg=tierC[tier]||'#94a3b8';
   const tierEmoji={S:'🏆',A:'⭐',B:'👍',C:'⚠️',Reject:'❌'};
-  const total=sc.total||0;
-  const totalClr=total>=70?'var(--green)':total>=40?'var(--gold)':'var(--red)';
+  const gpa=Number(r.gpa)||0;
+  const gpaClr=gpa>=3.50?'#22c55e':gpa>=3.20?'#06b6d4':gpa>=3.00?'#f59e0b':'#ef4444';
 
-  // Score bar helper
-  const sbar=function(label,obj){
-    if(!obj)return '';
-    const v=typeof obj==='object'?(Number(obj.score)||0):Number(obj)||0;
-    const mx=typeof obj==='object'?(Number(obj.max)||10):10;
-    const pct=mx>0?Math.round(v/mx*100):0;
-    const c=pct>=70?'var(--green)':pct>=40?'var(--gold)':'var(--red)';
-    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:.85rem">'
-      +'<span style="width:130px;color:var(--text2);flex-shrink:0">'+label+'</span>'
-      +'<div style="flex:1;height:10px;background:var(--border2);border-radius:5px;overflow:hidden">'
-      +'<div style="height:100%;width:'+pct+'%;background:'+c+';border-radius:5px"></div></div>'
-      +'<span style="width:50px;text-align:right;font-weight:700;color:'+c+'">'+v+'/'+mx+'</span></div>';
-  };
+  var h='<div style="margin-bottom:20px;border:2px solid '+tierBg+'44;border-radius:var(--r);overflow:hidden">';
 
-  // Section helper
-  var sec=function(icon,title,html,open){
-    return '<details'+(open?' open':'')+' style="margin-bottom:8px;border:1px solid var(--border2);border-radius:var(--r2);overflow:hidden">'
-      +'<summary style="padding:12px 14px;cursor:pointer;font-weight:600;font-size:.9rem;background:var(--bg2)">'+icon+' '+title+'</summary>'
-      +'<div style="padding:14px;font-size:.85rem;line-height:1.8;color:var(--text2)">'+html+'</div></details>';
-  };
+  // Header
+  h+='<div style="background:linear-gradient(135deg,'+tierBg+'18,'+tierBg+'08);padding:24px;text-align:center">';
+  h+='<div style="font-size:2.5rem">'+(tierEmoji[tier]||'🤖')+'</div>';
+  h+='<div style="display:inline-block;background:'+tierBg+'22;color:'+tierBg+';padding:6px 28px;border-radius:100px;font-size:1.3rem;font-weight:800;border:2px solid '+tierBg+'44;margin:8px 0">'+tier+' Tier</div>';
+  h+='<div style="font-size:2rem;font-weight:900;color:'+tierBg+';margin:4px 0">'+total+'<span style="font-size:.9rem;color:var(--text3)">/25</span></div>';
+  if(r.summary)h+='<div style="margin-top:8px;font-size:.85rem;color:var(--text2);max-width:500px;margin:8px auto 0">'+r.summary+'</div>';
+  h+='</div><div style="padding:16px">';
 
-  // Info row helper
-  var row=function(label,val,color){
-    if(!val||val==='-'||val==='ไม่ระบุ'||val==='ไม่ระบุใน Resume'||val===0||val==='0')return '';
-    return '<div style="display:flex;gap:8px;margin-bottom:8px;align-items:start">'
-      +'<span style="color:var(--text3);min-width:100px;flex-shrink:0;font-size:.82rem">'+label+'</span>'
-      +'<span style="color:'+(color||'var(--text)')+';font-weight:500">'+val+'</span></div>';
-  };
+  // 1. มหาวิทยาลัย
+  var uniHtml='<div style="padding:16px;background:var(--bg2);border-radius:var(--r2);margin-bottom:12px">';
+  uniHtml+='<div style="font-size:1.1rem;font-weight:700;margin-bottom:8px">🏫 '+(r.university||'ไม่ระบุ')+'</div>';
+  if(r._isTop15){
+    uniHtml+='<div style="display:inline-block;padding:4px 16px;border-radius:100px;font-size:.85rem;font-weight:700;background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.3)">🏆 Top 15 มหาวิทยาลัยไทย (+15 คะแนน)</div>';
+  }else{
+    uniHtml+='<div style="display:inline-block;padding:4px 16px;border-radius:100px;font-size:.85rem;font-weight:600;background:rgba(148,163,184,.1);color:var(--text3)">มหาวิทยาลัยอื่น (+0 คะแนน)</div>';
+  }
+  if(r.degree||r.major)uniHtml+='<div style="margin-top:8px;font-size:.85rem;color:var(--text2)">'+(r.degree||'')+' '+(r.major||'')+'</div>';
+  uniHtml+='</div>';
 
-  // Badge helper
-  var badge=function(text,color,bg){
-    return '<span style="display:inline-block;padding:3px 12px;border-radius:100px;font-size:.78rem;font-weight:600;background:'+bg+';color:'+color+';margin-right:6px;margin-bottom:4px">'+text+'</span>';
-  };
+  // 2. GPA
+  uniHtml+='<div style="padding:16px;background:var(--bg2);border-radius:var(--r2);margin-bottom:12px">';
+  uniHtml+='<div style="display:flex;align-items:center;gap:12px">';
+  uniHtml+='<div style="font-size:.85rem;color:var(--text2)">📊 เกรดเฉลี่ย</div>';
+  if(gpa>0){
+    uniHtml+='<div style="font-size:1.8rem;font-weight:900;color:'+gpaClr+'">'+gpa.toFixed(2)+'</div>';
+    uniHtml+='<div style="padding:3px 12px;border-radius:100px;font-size:.78rem;font-weight:600;background:'+gpaClr+'18;color:'+gpaClr+'">'+(r._gpaLevel||'')+'  (+'+r._gpaScore+' คะแนน)</div>';
+  }else{
+    uniHtml+='<div style="font-size:1.2rem;font-weight:600;color:var(--text3)">ไม่ระบุใน Resume (+0)</div>';
+  }
+  uniHtml+='</div></div>';
 
-  var html='<div style="margin-bottom:20px;border:2px solid '+tc+'44;border-radius:var(--r);overflow:hidden">';
+  // Score summary bar
+  uniHtml+='<div style="padding:12px 16px;background:var(--bg2);border-radius:var(--r2);margin-bottom:12px">';
+  uniHtml+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:.85rem;color:var(--text2)">คะแนนรวม</span><span style="font-size:1.1rem;font-weight:800;color:'+tierBg+'">'+total+'/25</span></div>';
+  var pct=Math.round(total/25*100);
+  uniHtml+='<div style="height:12px;background:var(--border2);border-radius:6px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+tierBg+';border-radius:6px"></div></div>';
+  uniHtml+='<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.75rem;color:var(--text3)"><span>มหาวิทยาลัย: '+(r._uniScore||0)+'/15</span><span>GPA: '+(r._gpaScore||0)+'/10</span></div>';
+  uniHtml+='</div>';
 
-  // ===== HEADER =====
-  html+='<div style="background:linear-gradient(135deg,'+tierBg+'18,'+tc+'12);padding:24px;text-align:center">';
-  html+='<div style="font-size:2.5rem;margin-bottom:4px">'+(tierEmoji[r.tier]||'🤖')+'</div>';
-  html+='<div style="display:inline-block;background:'+tierBg+'22;color:'+tierBg+';padding:6px 24px;border-radius:100px;font-size:1.3rem;font-weight:800;border:2px solid '+tierBg+'44;margin-bottom:8px">'+r.tier+' Tier</div>';
-  html+='<div style="font-size:2.2rem;font-weight:900;color:'+tc+';margin:8px 0">'+total+'<span style="font-size:1rem;color:var(--text3)">/100</span></div>';
-  html+='<div style="font-size:.9rem;font-weight:600;color:'+tc+'">'+(r.verdict==='ผ่าน'?'✅ ผ่านการคัดกรอง':'❌ ไม่ผ่านการคัดกรอง')+'</div>';
-  if(r.one_line_summary)html+='<div style="margin-top:10px;font-size:.85rem;color:var(--text2);max-width:500px;margin-left:auto;margin-right:auto">💡 '+r.one_line_summary+'</div>';
-  html+='</div>';
+  h+='<details open style="margin-bottom:8px;border:1px solid var(--border2);border-radius:var(--r2);overflow:hidden"><summary style="padding:12px 14px;cursor:pointer;font-weight:600;font-size:.9rem;background:var(--bg2)">🎓 การศึกษา & คะแนน — '+tier+' Tier ('+total+'/25)</summary><div style="padding:14px">'+uniHtml+'</div></details>';
 
-  html+='<div style="padding:16px">';
+  // 3+4 เพศ & อายุ
+  var infoHtml='<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
+  infoHtml+='<div style="padding:16px;background:var(--bg2);border-radius:var(--r2);text-align:center"><div style="font-size:.78rem;color:var(--text3);margin-bottom:4px">👤 ชื่อ</div><div style="font-weight:600">'+(r.name||'ไม่ระบุ')+'</div></div>';
+  infoHtml+='<div style="padding:16px;background:var(--bg2);border-radius:var(--r2);text-align:center"><div style="font-size:.78rem;color:var(--text3);margin-bottom:4px">⚧ เพศ</div><div style="font-weight:600;font-size:1.1rem">'+(r.gender||'ไม่ระบุ')+'</div></div>';
+  infoHtml+='<div style="padding:16px;background:var(--bg2);border-radius:var(--r2);text-align:center"><div style="font-size:.78rem;color:var(--text3);margin-bottom:4px">🎂 อายุ</div><div style="font-weight:600;font-size:1.1rem">'+(r.age?r.age+' ปี':'ไม่ระบุ')+'</div></div>';
+  infoHtml+='<div style="padding:16px;background:var(--bg2);border-radius:var(--r2);text-align:center"><div style="font-size:.78rem;color:var(--text3);margin-bottom:4px">💼 ประสบการณ์</div><div style="font-weight:600;font-size:1.1rem">'+(r.experience_years?r.experience_years+' ปี':'ไม่ระบุ')+'</div></div>';
+  infoHtml+='</div>';
+  h+='<details open style="margin-bottom:8px;border:1px solid var(--border2);border-radius:var(--r2);overflow:hidden"><summary style="padding:12px 14px;cursor:pointer;font-weight:600;font-size:.9rem;background:var(--bg2)">👤 ข้อมูลส่วนตัว</summary><div style="padding:14px">'+infoHtml+'</div></details>';
 
-  // ===== 1. ข้อมูลส่วนตัว =====
-  var profileHtml='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-  profileHtml+=row('👤 ชื่อ',p.name);
-  profileHtml+=row('⚧ เพศ',p.gender);
-  profileHtml+=row('🎂 อายุ',p.age?p.age+' ปี':'');
-  profileHtml+=row('🎓 วุฒิ',p.degree);
-  profileHtml+='</div>';
-  profileHtml+=row('🏫 มหาวิทยาลัย',p.university, p.is_top20?'var(--green)':'var(--text)');
-  if(p.is_top20)profileHtml+='<div style="margin:4px 0 8px">'+badge('🏆 Top 20 มหาวิทยาลัยไทย','#22c55e','rgba(34,197,94,.12)')+'</div>';
-  if(p.top20_note)profileHtml+='<div style="font-size:.78rem;color:var(--text3);margin-bottom:8px">'+p.top20_note+'</div>';
-  profileHtml+=row('📚 สาขา',p.major);
-  profileHtml+=row('📊 เกรดเฉลี่ย',p.gpa?p.gpa.toString():'',p.gpa>=3.5?'var(--green)':p.gpa>=3.0?'var(--accent)':p.gpa>=2.5?'var(--gold)':'var(--red)');
-  if(p.gpa_note&&p.gpa_note!=='ไม่ระบุ')profileHtml+='<div style="font-size:.78rem;color:var(--text3);margin-bottom:4px">'+p.gpa_note+'</div>';
-  html+=sec('👤','ข้อมูลผู้สมัคร'+(p.name?' — '+p.name:''),profileHtml,true);
+  // ประสบการณ์
+  if(r.experience_summary){
+    h+='<details style="margin-bottom:8px;border:1px solid var(--border2);border-radius:var(--r2);overflow:hidden"><summary style="padding:12px 14px;cursor:pointer;font-weight:600;font-size:.9rem;background:var(--bg2)">💼 ประสบการณ์ & ทักษะ</summary><div style="padding:14px;font-size:.85rem;line-height:1.8;color:var(--text2)">';
+    h+='<div style="padding:10px;background:var(--bg2);border-radius:var(--r2);margin-bottom:10px">'+r.experience_summary+'</div>';
+    if(r.skills)h+='<div style="margin-top:8px"><b>🎯 ทักษะ:</b> '+r.skills+'</div>';
+    h+='</div></details>';
+  }
 
-  // ===== 2. คะแนนรวม 6 ด้าน =====
-  var scoreHtml='';
-  scoreHtml+=sbar('🏫 มหาวิทยาลัย',sc.university);
-  scoreHtml+=sbar('📊 เกรดเฉลี่ย',sc.gpa);
-  scoreHtml+=sbar('💼 ประสบการณ์',sc.experience);
-  scoreHtml+=sbar('🎯 Skill ตรงตำแหน่ง',sc.skill_match);
-  scoreHtml+=sbar('🏆 ผลงานเด่น',sc.achievements);
-  scoreHtml+=sbar('🚀 ศักยภาพ',sc.potential);
-  scoreHtml+='<div style="text-align:right;font-size:1.3rem;font-weight:900;margin-top:14px;padding-top:14px;border-top:2px solid var(--border2);color:'+totalClr+'">รวม: '+total+'/100</div>';
-  html+=sec('📊','คะแนนรวม 6 ด้าน — '+total+'/100',scoreHtml,true);
-
-  // ===== 3. ควรเรียกสัมภาษณ์? =====
-  var intHtml='<div style="display:flex;align-items:center;gap:12px;padding:14px;background:'+(r.should_interview?'rgba(34,197,94,.08)':'rgba(239,68,68,.08)')+';border-radius:var(--r2);border:1px solid '+(r.should_interview?'rgba(34,197,94,.2)':'rgba(239,68,68,.2)')+'">';
-  intHtml+='<span style="font-size:2.2rem">'+(r.should_interview?'✅':'❌')+'</span>';
-  intHtml+='<div><div style="font-weight:700;font-size:1.05rem;color:'+(r.should_interview?'var(--green)':'var(--red)')+'">'+(r.should_interview?'ควรเรียกสัมภาษณ์':'ไม่แนะนำให้สัมภาษณ์')+'</div>';
-  intHtml+='<div style="font-size:.85rem;color:var(--text2);margin-top:4px">'+(r.interview_reason||'')+'</div></div></div>';
-  if(r.tier_reason)intHtml+='<div style="margin-top:10px;font-size:.82rem;color:var(--text3)">📋 '+r.tier_reason+'</div>';
-  html+=sec('📋','สรุปสำหรับผู้บริหาร',intHtml,true);
-
-  // ===== 4. ประสบการณ์ทำงาน =====
-  var expHtml='';
-  expHtml+=row('📅 ประสบการณ์',ex.total_years?ex.total_years+' ปี':'');
-  if(ex.summary)expHtml+='<div style="padding:10px;background:var(--bg2);border-radius:var(--r2);margin-bottom:10px">'+ex.summary+'</div>';
-  expHtml+=row('🏢 บริษัท',ex.companies);
-  expHtml+=row('🔗 ความเกี่ยวข้อง',ex.relevance);
-  expHtml+=row('🏆 ผลงานเด่น',ex.key_achievements,'var(--green)');
-  expHtml+=row('🔍 ทำจริงหรือคำสวย',ex.is_real);
-  html+=sec('💼','ประสบการณ์ทำงาน'+(ex.total_years?' — '+ex.total_years+' ปี':''),expHtml);
-
-  // ===== 5. ทักษะ =====
-  var skHtml='';
-  skHtml+=row('💻 Hard Skills',sk.hard_skills);
-  skHtml+=row('🤝 Soft Skills',sk.soft_skills);
-  skHtml+=row('🛠 เครื่องมือ',sk.tools);
-  skHtml+=row('🌐 ภาษา',sk.languages);
-  html+=sec('🎯','ทักษะ',skHtml);
-
-  // ===== 6. จุดแข็ง =====
+  // จุดแข็ง
   if(r.strengths&&r.strengths.length){
-    var stHtml=r.strengths.map(function(s){return '<div style="display:flex;gap:8px;margin-bottom:8px;padding:8px 12px;background:rgba(34,197,94,.06);border-radius:var(--r2);border-left:3px solid var(--green)"><span style="color:var(--green)">✅</span><span>'+s+'</span></div>';}).join('');
-    html+=sec('💪','จุดแข็ง ('+r.strengths.length+')',stHtml);
+    var stH=r.strengths.map(function(s){return '<div style="display:flex;gap:8px;margin-bottom:6px;padding:8px 12px;background:rgba(34,197,94,.06);border-radius:var(--r2);border-left:3px solid var(--green)"><span>✅</span><span>'+s+'</span></div>';}).join('');
+    h+='<details style="margin-bottom:8px;border:1px solid var(--border2);border-radius:var(--r2);overflow:hidden"><summary style="padding:12px 14px;cursor:pointer;font-weight:600;font-size:.9rem;background:var(--bg2)">💪 จุดแข็ง ('+r.strengths.length+')</summary><div style="padding:14px">'+stH+'</div></details>';
   }
 
-  // ===== 7. Red Flags =====
-  if(r.red_flags&&r.red_flags.length&&r.red_flags[0]!=='ไม่มี'){
-    var rfHtml=r.red_flags.map(function(f){return '<div style="display:flex;gap:8px;margin-bottom:8px;padding:8px 12px;background:rgba(239,68,68,.06);border-radius:var(--r2);border-left:3px solid var(--red)"><span style="color:var(--red)">⚠️</span><span>'+f+'</span></div>';}).join('');
-    html+=sec('🚩','Red Flags ('+r.red_flags.length+')',rfHtml);
+  // Red Flags
+  if(r.red_flags&&r.red_flags.length&&r.red_flags[0]!=='ไม่มี'&&r.red_flags[0]!=='-'){
+    var rfH=r.red_flags.map(function(f){return '<div style="display:flex;gap:8px;margin-bottom:6px;padding:8px 12px;background:rgba(239,68,68,.06);border-radius:var(--r2);border-left:3px solid var(--red)"><span>⚠️</span><span>'+f+'</span></div>';}).join('');
+    h+='<details style="margin-bottom:8px;border:1px solid var(--border2);border-radius:var(--r2);overflow:hidden"><summary style="padding:12px 14px;cursor:pointer;font-weight:600;font-size:.9rem;background:var(--bg2)">🚩 Red Flags ('+r.red_flags.length+')</summary><div style="padding:14px">'+rfH+'</div></details>';
   }
 
-  // ===== 8. คำถามสัมภาษณ์ =====
+  // คำถามสัมภาษณ์
   if(r.interview_questions&&r.interview_questions.length){
-    var iqHtml=r.interview_questions.map(function(q,i){return '<div style="display:flex;gap:10px;margin-bottom:10px;padding:10px 12px;background:var(--bg2);border-radius:var(--r2)"><span style="color:var(--accent);font-weight:700;flex-shrink:0">'+(i+1)+'.</span><span>'+q+'</span></div>';}).join('');
-    html+=sec('❓','คำถามสัมภาษณ์ ('+r.interview_questions.length+' ข้อ)',iqHtml);
+    var iqH=r.interview_questions.map(function(q,i){return '<div style="display:flex;gap:10px;margin-bottom:8px;padding:10px 12px;background:var(--bg2);border-radius:var(--r2)"><span style="color:var(--accent);font-weight:700">'+(i+1)+'.</span><span>'+q+'</span></div>';}).join('');
+    h+='<details style="margin-bottom:8px;border:1px solid var(--border2);border-radius:var(--r2);overflow:hidden"><summary style="padding:12px 14px;cursor:pointer;font-weight:600;font-size:.9rem;background:var(--bg2)">❓ คำถามสัมภาษณ์ ('+r.interview_questions.length+')</summary><div style="padding:14px">'+iqH+'</div></details>';
   }
 
-  html+='</div></div>';
-  return html;
+  h+='</div></div>';
+  return h;
 };
