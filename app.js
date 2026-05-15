@@ -174,7 +174,7 @@ async function renderAdmin(){
   adminEl.innerHTML='<div class="admin-layout">'+adminSidebar(view)+'<div id="admin-main" class="admin-content"><div class="empty-state"><div class="empty-icon">⏳</div><h3>กำลังโหลด...</h3></div></div></div>';
   try{await loadAdminData()}catch(e){console.error(e)}
   if(view==='dashboard'){
-    document.querySelector('.admin-layout').innerHTML=adminSidebar('dashboard')+renderDashboardView();
+    document.querySelector('.admin-layout').innerHTML=adminSidebar('dashboard')+'<div class="admin-content">'+renderDashboardView()+'</div>';
     return;
   }
   // Applicants view
