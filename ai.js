@@ -39,12 +39,16 @@ ${jobReq?'คุณสมบัติที่ต้องการ: '+jobReq:''
 score ทุกตัวต้องเป็นตัวเลข อย่าชมเกินจริง ถ้าไม่มีหลักฐานให้บอกตรงๆ`;
 }
 
-window.analyzeResume=async function(id){
+window.analyzeResume=async function(id,promptId){
   let apiKey=sessionStorage.getItem('openai_key');
   if(!apiKey){setAIKey();apiKey=sessionStorage.getItem('openai_key');if(!apiKey)return}
   const app=(window._adminApps||[]).find(a=>a.id===id);
   if(!app||!app.resume_path){toast('ไม่พบ Resume','error');return}
-  toast('🤖 กำลังวิเคราะห์ Resume... รอ 15-30 วินาที');
+  // If no promptId, show selector
+  if(!promptId){showPromptSelector(id);return}
+  const prompts=getPrompts();
+  const selPrompt=prompts.find(p=>p.id===promptId)||prompts[0];
+  toast('🤖 กำลังวิเคราะห์ด้วย "'+selPrompt.name+'"... รอ 15-30 วินาที');
   try{
     // 1. Download PDF
     console.log('[AI] Downloading:',app.resume_path);
@@ -61,7 +65,7 @@ window.analyzeResume=async function(id){
       throw new Error('ไม่สามารถแปลง PDF เป็นภาพได้: '+e.message);
     }
     if(!images.length)throw new Error('PDF ไม่มีหน้า');
-    // 3. Get job details
+    // 3. Get job details and build prompt from template
     const jobTitle=app.jobs?app.jobs.title:'ไม่ระบุ';
     let jobDesc='',jobReq='';
     if(app.job_id){
@@ -70,8 +74,9 @@ window.analyzeResume=async function(id){
       });
       if(jRes.ok){const jd=await jRes.json();if(jd[0]){jobDesc=jd[0].description||'';jobReq=jd[0].requirements||''}}
     }
-    // 4. Build vision message with images
-    const content=[{type:'text',text:buildPrompt(jobTitle,jobDesc,jobReq)}];
+    // 4. Build vision message with selected prompt template
+    const promptText=selPrompt.content.replace(/\{\{JOB_TITLE\}\}/g,jobTitle).replace(/\{\{JOB_DESC\}\}/g,jobDesc?'ลักษณะงาน: '+jobDesc:'').replace(/\{\{JOB_REQ\}\}/g,jobReq?'คุณสมบัติ: '+jobReq:'');
+    const content=[{type:'text',text:promptText}];
     images.forEach(img=>content.push({type:'image_url',image_url:{url:img,detail:'high'}}));
     // 5. Call OpenAI GPT-4o vision
     const aiRes=await fetch('https://api.openai.com/v1/chat/completions',{
