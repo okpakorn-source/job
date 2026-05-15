@@ -2,8 +2,8 @@
 if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 window.setAIKey=function(){
-  const key=prompt('กรุณาใส่ OpenAI API Key:',sessionStorage.getItem('openai_key')||'');
-  if(key){sessionStorage.setItem('openai_key',key.trim());toast('บันทึก API Key เรียบร้อย ✅')}
+  const key=prompt('กรุณาใส่ OpenAI API Key:\n(จะถูกบันทึกไว้ในเครื่องนี้ กรอกครั้งเดียว)',localStorage.getItem('openai_key')||'');
+  if(key){localStorage.setItem('openai_key',key.trim());toast('บันทึก API Key เรียบร้อย ✅ (จำไว้ถาวร)')}
 };
 
 // Convert PDF pages to base64 images via canvas
@@ -40,8 +40,8 @@ score ทุกตัวต้องเป็นตัวเลข อย่า�
 }
 
 window.analyzeResume=async function(id,promptId){
-  let apiKey=sessionStorage.getItem('openai_key');
-  if(!apiKey){setAIKey();apiKey=sessionStorage.getItem('openai_key');if(!apiKey)return}
+  let apiKey=localStorage.getItem('openai_key');
+  if(!apiKey){setAIKey();apiKey=localStorage.getItem('openai_key');if(!apiKey)return}
   const app=(window._adminApps||[]).find(a=>a.id===id);
   if(!app||!app.resume_path){toast('ไม่พบ Resume','error');return}
   // If no promptId, show selector
