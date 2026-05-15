@@ -1,4 +1,4 @@
-// ─── AI Resume Analyzer ──────────────────────────────
+// ─── AI Resume Analyzer v2 ──────────────────────────
 if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 window.setAIKey=function(){
@@ -6,85 +6,90 @@ window.setAIKey=function(){
   if(key){sessionStorage.setItem('openai_key',key.trim());toast('บันทึก API Key เรียบร้อย ✅')}
 };
 
-async function extractPdfText(arrayBuffer){
-  const pdf=await pdfjsLib.getDocument({data:arrayBuffer}).promise;
-  let text='';
-  for(let i=1;i<=pdf.numPages;i++){
-    const page=await pdf.getPage(i);
-    const c=await page.getTextContent();
-    text+=c.items.map(x=>x.str).join(' ')+'\n';
-  }
-  return text.trim();
+async function getPdfText(resumePath){
+  // Use Supabase client to download (handles auth+CORS)
+  const {data,error}=await sb.storage.from('resumes').download(resumePath);
+  if(error||!data)throw new Error('ดาวน์โหลด PDF ไม่สำเร็จ: '+(error?.message||''));
+  const buf=await data.arrayBuffer();
+  try{
+    const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+    let text='';
+    for(let i=1;i<=pdf.numPages;i++){
+      const pg=await pdf.getPage(i);
+      const c=await pg.getTextContent();
+      text+=c.items.map(x=>x.str).join(' ')+'\n';
+    }
+    if(text.trim().length>30)return text.trim();
+  }catch(e){console.warn('[AI] pdf.js:',e)}
+  return null;
+}
+
+function buildPrompt(jobTitle,jobDesc,jobReq,resumeText){
+  return `คุณคือผู้เชี่ยวชาญด้าน HR, Talent Acquisition, Business Operator และผู้ประเมินศักยภาพผู้สมัครงานระดับมืออาชีพ
+
+อ่าน Resume ที่ให้มาแล้ววิเคราะห์อย่างละเอียด เพื่อช่วยคัดเลือกผู้สมัครที่ "มีของที่สุด"
+
+ตำแหน่งที่สมัคร: "${jobTitle}"
+${jobDesc?'ลักษณะงาน: '+jobDesc:''}
+${jobReq?'คุณสมบัติที่ต้องการ: '+jobReq:''}
+
+Resume:
+${resumeText}
+
+วิเคราะห์ตาม 10 หัวข้อ แล้วตอบเป็น JSON ตาม format นี้เท่านั้น:
+{
+  "identity":{"type":"สายงาน","strengths":"จุดแข็งหลัก","top_experience":"ประสบการณ์เด่น","org_fit":"เหมาะกับองค์กรแบบไหน","level":"Junior/Mid/Senior/Lead/Manager"},
+  "experience":{"history":"สรุปประวัติงาน","relevance":"ความเกี่ยวข้องกับตำแหน่ง","evidence":"หลักฐานผลงานจริง","authenticity":"ทำจริงหรือคำสวย","progression":"career progression"},
+  "skills":{"hard":{"score":1-10,"detail":""},"soft":{"score":1-10,"detail":""},"technical":{"score":1-10,"detail":""},"leadership":{"score":1-10,"detail":""},"problem_solving":{"score":1-10,"detail":""},"communication":{"score":1-10,"detail":""},"analytical":{"score":1-10,"detail":""},"creativity":{"score":1-10,"detail":""}},
+  "potential":{"special":"ความพิเศษ","genius_signal":"สัญญาณคนเก่งจริง","rare_ability":"ความสามารถหายาก","ownership":"ความเป็นเจ้าของงาน","growth_mindset":"growth mindset","growth_speed":"โอกาสโตเร็ว"},
+  "red_flags":["รายการ red flags ถ้ามี"],
+  "job_fit":{"match_pct":0-100,"best_match":"จุดที่ตรงที่สุด","gaps":"จุดที่ยังขาด","interview_topics":"ต้องสัมภาษณ์เพิ่มเรื่องอะไร","starting_role":"ถ้ารับเข้ามาควรเริ่มจากงานแบบไหน"},
+  "scores":{"experience":0-20,"proven_results":0-20,"skill_match":0-20,"potential":0-20,"reliability":0-10,"team_fit":0-10,"total":0-100},
+  "tier":"S|A|B|C|Reject",
+  "tier_reason":"เหตุผลการจัดระดับ",
+  "interview_questions":["คำถาม1","คำถาม2","คำถาม3","คำถาม4","คำถาม5","คำถาม6","คำถาม7","คำถาม8","คำถาม9","คำถาม10"],
+  "executive_summary":{"should_interview":true/false,"reason":"เหตุผลหลัก","risk":"ความเสี่ยง","ranking_hint":"ลำดับประมาณไหนถ้าเทียบหลายคน"},
+  "verdict":"ผ่าน|ไม่ผ่าน"
+}`;
 }
 
 window.analyzeResume=async function(id){
-  const apiKey=sessionStorage.getItem('openai_key');
-  if(!apiKey){setAIKey();if(!sessionStorage.getItem('openai_key'))return}
+  let apiKey=sessionStorage.getItem('openai_key');
+  if(!apiKey){setAIKey();apiKey=sessionStorage.getItem('openai_key');if(!apiKey)return}
   const app=(window._adminApps||[]).find(a=>a.id===id);
-  if(!app||!app.resume_path){toast('ไม่พบ Resume สำหรับวิเคราะห์','error');return}
-  toast('🤖 กำลังวิเคราะห์ Resume... รอสักครู่');
+  if(!app||!app.resume_path){toast('ไม่พบ Resume','error');return}
+  toast('🤖 กำลังวิเคราะห์ Resume... รอ 15-30 วินาที');
   try{
-    // 1. Download PDF as blob via authenticated fetch
-    const dlRes=await fetch(SUPABASE_URL+'/storage/v1/object/authenticated/resumes/'+app.resume_path,{
-      headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}
-    });
-    if(!dlRes.ok){
-      // Fallback: try public URL
-      const dl2=await fetch(SUPABASE_URL+'/storage/v1/object/public/resumes/'+app.resume_path);
-      if(!dl2.ok)throw new Error('ไม่สามารถดาวน์โหลด Resume ได้');
-      var pdfBuffer=await dl2.arrayBuffer();
-    }else{
-      var pdfBuffer=await dlRes.arrayBuffer();
+    const resumeText=await getPdfText(app.resume_path);
+    if(!resumeText)throw new Error('ไม่สามารถอ่านข้อความจาก PDF ได้ (อาจเป็นไฟล์ scan)');
+    // Get job details
+    const jobTitle=app.jobs?app.jobs.title:'ไม่ระบุ';
+    let jobDesc='',jobReq='';
+    if(app.job_id){
+      const jRes=await fetch(SUPABASE_URL+'/rest/v1/jobs?id=eq.'+app.job_id+'&select=description,requirements',{
+        headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}
+      });
+      if(jRes.ok){const jd=await jRes.json();if(jd[0]){jobDesc=jd[0].description||'';jobReq=jd[0].requirements||''}}
     }
-    // 2. Extract text from PDF buffer
-    let resumeText='';
-    try{
-      resumeText=await extractPdfText(pdfBuffer);
-    }catch(e){
-      console.warn('[AI] pdf.js error:',e);
-    }
-    const jobTitle=app.jobs?app.jobs.title:'ไม่ระบุตำแหน่ง';
-    // 3. If text extraction failed, send as base64 image to GPT-4o
-    let messages;
-    if(!resumeText||resumeText.length<30){
-      const base64=btoa(new Uint8Array(pdfBuffer).reduce((d,b)=>d+String.fromCharCode(b),''));
-      messages=[
-        {role:'system',content:'คุณเป็นผู้เชี่ยวชาญ HR ด้านการคัดกรอง Resume ให้คะแนนและวิเคราะห์ผู้สมัครงาน ตอบเป็น JSON เท่านั้น'},
-        {role:'user',content:[
-          {type:'text',text:'วิเคราะห์ Resume นี้สำหรับตำแหน่ง "'+jobTitle+'"\n\nตอบเป็น JSON:\n{"overall_score":0-100,"skill_score":0-100,"experience_score":0-100,"education_score":0-100,"communication_score":0-100,"tier":"top|strong|average|weak","summary":"สรุป 2-3 ประโยค","recommendation":"คำแนะนำ","strengths":["จุดแข็ง"],"improvements":["จุดที่ควรพัฒนา"]}'},
-          {type:'image_url',image_url:{url:'data:application/pdf;base64,'+base64}}
-        ]}
-      ];
-    }else{
-      messages=[
-        {role:'system',content:'คุณเป็นผู้เชี่ยวชาญ HR ด้านการคัดกรอง Resume ให้คะแนนและวิเคราะห์ผู้สมัครงาน ตอบเป็น JSON เท่านั้น'},
-        {role:'user',content:'วิเคราะห์ Resume นี้สำหรับตำแหน่ง "'+jobTitle+'"\n\nResume:\n'+resumeText.slice(0,6000)+'\n\nตอบเป็น JSON:\n{"overall_score":0-100,"skill_score":0-100,"experience_score":0-100,"education_score":0-100,"communication_score":0-100,"tier":"top|strong|average|weak","summary":"สรุป 2-3 ประโยค","recommendation":"คำแนะนำ","strengths":["จุดแข็ง"],"improvements":["จุดที่ควรพัฒนา"]}'}
-      ];
-    }
-    // 4. Call OpenAI
+    const prompt=buildPrompt(jobTitle,jobDesc,jobReq,resumeText.slice(0,8000));
     const aiRes=await fetch('https://api.openai.com/v1/chat/completions',{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+sessionStorage.getItem('openai_key')},
-      body:JSON.stringify({model:'gpt-4o-mini',response_format:{type:'json_object'},messages:messages})
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
+      body:JSON.stringify({model:'gpt-4o-mini',response_format:{type:'json_object'},max_tokens:4000,messages:[{role:'user',content:prompt}]})
     });
     if(!aiRes.ok){const e=await aiRes.json();throw new Error(e.error?.message||'OpenAI Error')}
     const aiData=await aiRes.json();
-    const analysis=JSON.parse(aiData.choices[0].message.content);
-    // 5. Save to Supabase
+    const r=JSON.parse(aiData.choices[0].message.content);
+    // Map to DB columns
+    const total=r.scores?.total||0;
+    const tierMap={S:'top',A:'strong',B:'average',C:'weak',Reject:'weak'};
     await fetch(SUPABASE_URL+'/rest/v1/applicants?id=eq.'+id,{
       method:'PATCH',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'},
-      body:JSON.stringify({
-        ai_analyzed:true,ai_analyzed_at:new Date().toISOString(),ai_summary:analysis,
-        ai_score_overall:analysis.overall_score,ai_score_skill:analysis.skill_score,
-        ai_score_exp:analysis.experience_score,ai_score_edu:analysis.education_score,
-        ai_score_comm:analysis.communication_score,ai_tier:analysis.tier,
-        ai_recommendation:analysis.recommendation
-      })
+      body:JSON.stringify({ai_analyzed:true,ai_analyzed_at:new Date().toISOString(),ai_summary:r,ai_score_overall:total,ai_tier:tierMap[r.tier]||'average',ai_recommendation:r.executive_summary?.reason||''})
     });
-    // 6. Update local data
-    Object.assign(app,{ai_analyzed:true,ai_summary:analysis,ai_score_overall:analysis.overall_score,ai_tier:analysis.tier,ai_recommendation:analysis.recommendation,ai_score_skill:analysis.skill_score,ai_score_exp:analysis.experience_score,ai_score_edu:analysis.education_score,ai_score_comm:analysis.communication_score});
-    toast('วิเคราะห์สำเร็จ! คะแนน: '+analysis.overall_score+'/100 🎯');
+    Object.assign(app,{ai_analyzed:true,ai_summary:r,ai_score_overall:total,ai_tier:tierMap[r.tier]||'average'});
+    toast(r.verdict==='ผ่าน'?'✅ ผลวิเคราะห์: ผ่าน ('+total+'/100)':'❌ ผลวิเคราะห์: ไม่ผ่าน ('+total+'/100)');
     filterApplicants();
     viewApplicant(id);
   }catch(err){
@@ -95,25 +100,38 @@ window.analyzeResume=async function(id){
 
 window.renderAIResults=function(a){
   if(!a.ai_analyzed||!a.ai_summary)return '';
-  const s=a.ai_summary;
-  const tierColors={top:'#22c55e',strong:'#06b6d4',average:'#f59e0b',weak:'#ef4444'};
-  const tierLabels={top:'🏆 Top',strong:'💪 Strong',average:'📊 Average',weak:'⚠️ Weak'};
-  const tc=tierColors[s.tier]||'#94a3b8';
-  const scoreBar=(label,val)=>`<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:3px"><span>${label}</span><span style="font-weight:700;color:${val>=70?'var(--green)':val>=40?'var(--gold)':'var(--red)'}">${val}/100</span></div><div style="height:6px;background:var(--border2);border-radius:3px;overflow:hidden"><div style="height:100%;width:${val}%;background:${val>=70?'var(--green)':val>=40?'var(--gold)':'var(--red)'};border-radius:3px;transition:width .5s"></div></div></div>`;
-  return `<div style="margin-bottom:20px;border:1px solid ${tc}33;border-radius:var(--r);overflow:hidden">
-    <div style="background:${tc}15;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
-      <div style="font-weight:700;font-size:.95rem">🤖 AI Resume Analysis</div>
-      <span style="background:${tc}22;color:${tc};padding:4px 12px;border-radius:100px;font-size:.8rem;font-weight:700">${tierLabels[s.tier]||s.tier} — ${s.overall_score}/100</span>
+  const r=a.ai_summary;
+  const tc=r.verdict==='ผ่าน'?'#22c55e':'#ef4444';
+  const tierC={S:'#22c55e',A:'#06b6d4',B:'#f59e0b',C:'#ef4444',Reject:'#ef4444'};
+  const tierBg=tierC[r.tier]||'#94a3b8';
+  const bar=(l,v,mx)=>{const p=Math.round(v/mx*100);return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.82rem"><span style="width:160px;color:var(--text2)">${l}</span><div style="flex:1;height:6px;background:var(--border2);border-radius:3px;overflow:hidden"><div style="height:100%;width:${p}%;background:${p>=70?'var(--green)':p>=40?'var(--gold)':'var(--red)'};border-radius:3px"></div></div><span style="width:40px;text-align:right;font-weight:700;color:${p>=70?'var(--green)':p>=40?'var(--gold)':'var(--red)'}">${v}/${mx}</span></div>`};
+  const sk=r.skills||{};
+  const skillBar=(l,obj)=>obj?bar(l,obj.score||0,10):'';
+  const sc=r.scores||{};
+  const section=(icon,title,html)=>`<details style="margin-bottom:8px;border:1px solid var(--border2);border-radius:var(--r2);overflow:hidden"><summary style="padding:10px 14px;cursor:pointer;font-weight:600;font-size:.88rem;background:var(--bg2)">${icon} ${title}</summary><div style="padding:14px;font-size:.85rem;line-height:1.7;color:var(--text2)">${html}</div></details>`;
+  const id=r.identity||{};
+  const exp=r.experience||{};
+  const pot=r.potential||{};
+  const jf=r.job_fit||{};
+  const es=r.executive_summary||{};
+  return `<div style="margin-bottom:20px;border:2px solid ${tc}44;border-radius:var(--r);overflow:hidden">
+    <div style="background:${tc}15;padding:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div style="font-weight:800;font-size:1.1rem">🤖 AI Resume Analysis</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="background:${tierBg}22;color:${tierBg};padding:4px 14px;border-radius:100px;font-size:.85rem;font-weight:700">${r.tier} Tier</span>
+        <span style="background:${tc}22;color:${tc};padding:4px 14px;border-radius:100px;font-size:.85rem;font-weight:700">${r.verdict} — ${sc.total||0}/100</span>
+      </div>
     </div>
     <div style="padding:16px">
-      ${scoreBar('🎯 ทักษะ (Skill)',s.skill_score)}
-      ${scoreBar('💼 ประสบการณ์ (Experience)',s.experience_score)}
-      ${scoreBar('🎓 การศึกษา (Education)',s.education_score)}
-      ${scoreBar('💬 การสื่อสาร (Communication)',s.communication_score)}
-      <div style="margin-top:14px;padding:12px;background:var(--bg2);border-radius:var(--r2);font-size:.88rem;line-height:1.6;color:var(--text2)"><strong>สรุป:</strong> ${s.summary||''}</div>
-      ${s.recommendation?`<div style="margin-top:8px;padding:12px;background:rgba(99,102,241,.06);border-radius:var(--r2);font-size:.85rem;color:var(--accent)"><strong>💡 คำแนะนำ:</strong> ${s.recommendation}</div>`:''}
-      ${s.strengths?`<div style="margin-top:8px;font-size:.83rem"><strong style="color:var(--green)">✅ จุดแข็ง:</strong> ${s.strengths.join(', ')}</div>`:''}
-      ${s.improvements?`<div style="margin-top:4px;font-size:.83rem"><strong style="color:var(--gold)">📌 ควรพัฒนา:</strong> ${s.improvements.join(', ')}</div>`:''}
+      ${section('👤','สรุปตัวตนผู้สมัคร',`<p><strong>สายงาน:</strong> ${id.type||'-'}</p><p><strong>จุดแข็ง:</strong> ${id.strengths||'-'}</p><p><strong>ประสบการณ์เด่น:</strong> ${id.top_experience||'-'}</p><p><strong>เหมาะกับองค์กร:</strong> ${id.org_fit||'-'}</p><p><strong>ระดับ:</strong> ${id.level||'-'}</p>`)}
+      ${section('💼','ประสบการณ์ทำงาน',`<p>${exp.history||'-'}</p><p><strong>ความเกี่ยวข้อง:</strong> ${exp.relevance||'-'}</p><p><strong>หลักฐาน:</strong> ${exp.evidence||'-'}</p><p><strong>ความจริงแท้:</strong> ${exp.authenticity||'-'}</p><p><strong>Career Path:</strong> ${exp.progression||'-'}</p>`)}
+      ${section('🎯','Skill Assessment',`${skillBar('Hard Skills',sk.hard)}${skillBar('Soft Skills',sk.soft)}${skillBar('Technical',sk.technical)}${skillBar('Leadership',sk.leadership)}${skillBar('Problem Solving',sk.problem_solving)}${skillBar('Communication',sk.communication)}${skillBar('Analytical',sk.analytical)}${skillBar('Creativity',sk.creativity)}`)}
+      ${section('⭐','ความ "มีของ"',`<p><strong>ความพิเศษ:</strong> ${pot.special||'-'}</p><p><strong>สัญญาณคนเก่ง:</strong> ${pot.genius_signal||'-'}</p><p><strong>ความสามารถหายาก:</strong> ${pot.rare_ability||'-'}</p><p><strong>Ownership:</strong> ${pot.ownership||'-'}</p><p><strong>Growth Mindset:</strong> ${pot.growth_mindset||'-'}</p>`)}
+      ${r.red_flags?.length?section('🚩','Red Flags',`<ul style="padding-left:18px">${r.red_flags.map(f=>'<li style="margin-bottom:4px;color:var(--red)">'+f+'</li>').join('')}</ul>`):''}
+      ${section('📊','ความเหมาะกับตำแหน่ง',`<p><strong>Match:</strong> <span style="font-size:1.2rem;font-weight:800;color:${(jf.match_pct||0)>=70?'var(--green)':'var(--gold)'}">${jf.match_pct||0}%</span></p><p><strong>จุดที่ตรง:</strong> ${jf.best_match||'-'}</p><p><strong>จุดที่ขาด:</strong> ${jf.gaps||'-'}</p><p><strong>ต้องสัมภาษณ์เพิ่ม:</strong> ${jf.interview_topics||'-'}</p><p><strong>ควรเริ่มจาก:</strong> ${jf.starting_role||'-'}</p>`)}
+      ${section('📈','คะแนนรวม',`${bar('ประสบการณ์ตรงสาย',sc.experience||0,20)}${bar('ผลงานที่พิสูจน์ได้',sc.proven_results||0,20)}${bar('Skill ตรงตำแหน่ง',sc.skill_match||0,20)}${bar('ศักยภาพเติบโต',sc.potential||0,20)}${bar('ความน่าเชื่อถือ',sc.reliability||0,10)}${bar('เหมาะกับทีม',sc.team_fit||0,10)}<div style="text-align:right;font-size:1.1rem;font-weight:800;margin-top:8px;color:${(sc.total||0)>=70?'var(--green)':'var(--gold)'}">รวม: ${sc.total||0}/100</div>`)}
+      ${r.interview_questions?.length?section('❓','คำถามสัมภาษณ์',`<ol style="padding-left:18px">${r.interview_questions.map(q=>'<li style="margin-bottom:6px">'+q+'</li>').join('')}</ol>`):''}
+      ${section('📋','สรุปสำหรับผู้บริหาร',`<p><strong>ควรสัมภาษณ์:</strong> <span style="font-weight:700;color:${es.should_interview?'var(--green)':'var(--red)'}">${es.should_interview?'✅ ใช่':'❌ ไม่'}</span></p><p><strong>เหตุผล:</strong> ${es.reason||'-'}</p><p><strong>ความเสี่ยง:</strong> ${es.risk||'-'}</p><p><strong>ลำดับ:</strong> ${es.ranking_hint||'-'}</p>`)}
     </div>
   </div>`;
 };
