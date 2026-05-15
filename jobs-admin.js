@@ -1,4 +1,6 @@
 // ─── Job Management Admin ────────────────────────────
+let _quillDesc=null,_quillReq=null,_quillBenefits=null,_quillDetail=null;
+
 window.renderJobManager=function(){
   _adminView='jobs';
   const adminEl=document.getElementById('page-admin');
@@ -44,6 +46,29 @@ async function loadJobsData(){
     }).join('')||'<div class="empty-state"><h3>ยังไม่มีตำแหน่งงาน</h3></div>'}</div>`;
 }
 
+function initQuill(id,placeholder,content){
+  const q=new Quill('#'+id,{
+    theme:'snow',
+    placeholder:placeholder,
+    modules:{
+      toolbar:[
+        [{'header':[1,2,3,false]}],
+        ['bold','italic','underline','strike'],
+        [{'color':[]},{'background':[]}],
+        [{'list':'ordered'},{'list':'bullet'}],
+        ['link','image'],
+        ['blockquote','code-block'],
+        ['clean']
+      ]
+    }
+  });
+  if(content){
+    if(content.startsWith('<'))q.root.innerHTML=content;
+    else q.setText(content);
+  }
+  return q;
+}
+
 window.showJobForm=function(editId){
   const jobs=window._adminJobs||[];
   const j=editId?jobs.find(x=>x.id==editId):null;
@@ -60,12 +85,12 @@ window.showJobForm=function(editId){
       <div class="form-group"><label>สถานะ</label><select id="jf-status"><option value="open" ${j?.status==='open'?'selected':''}>เปิดรับ</option><option value="closed" ${j?.status!=='open'?'selected':''}>ปิดรับ</option></select></div>
     </div>
     <div class="form-group" style="margin-top:12px"><label>สรุปสั้น</label><input id="jf-summary" value="${j?.summary||''}" placeholder="สรุป 1-2 ประโยค"/></div>
-    <div class="form-group" style="margin-top:12px"><label>รายละเอียดงาน</label><textarea id="jf-desc" rows="4" placeholder="อธิบายหน้าที่ ความรับผิดชอบ...">${j?.description||''}</textarea></div>
-    <div class="form-group" style="margin-top:12px"><label>คุณสมบัติ</label><textarea id="jf-req" rows="3" placeholder="คุณสมบัติที่ต้องการ...">${j?.requirements||''}</textarea></div>
-    <div class="form-group" style="margin-top:12px"><label>สวัสดิการ</label><textarea id="jf-benefits" rows="2" placeholder="สวัสดิการที่ได้รับ...">${j?.benefits||''}</textarea></div>
-    <div class="form-group" style="margin-top:12px"><label>รายละเอียดเพิ่มเติม (แบบยาว)</label><textarea id="jf-detail" rows="4" placeholder="รายละเอียดเต็ม...">${j?.detailed_desc||''}</textarea></div>
+    <div class="form-group" style="margin-top:16px"><label>📝 รายละเอียดงาน <span style="font-size:.75rem;color:var(--text3)">(รองรับรูปภาพ+ลิงค์)</span></label><div id="q-desc" style="min-height:120px"></div></div>
+    <div class="form-group" style="margin-top:16px"><label>📋 คุณสมบัติที่ต้องการ</label><div id="q-req" style="min-height:100px"></div></div>
+    <div class="form-group" style="margin-top:16px"><label>🎁 สวัสดิการ</label><div id="q-benefits" style="min-height:80px"></div></div>
+    <div class="form-group" style="margin-top:16px"><label>📄 รายละเอียดเพิ่มเติม</label><div id="q-detail" style="min-height:100px"></div></div>
     <div class="form-group" style="margin-top:12px">
-      <label>รูปภาพตำแหน่ง</label>
+      <label>รูปภาพปกตำแหน่ง</label>
       ${j?.image_url?`<img src="${j.image_url}" style="width:100%;max-height:150px;object-fit:cover;border-radius:var(--r2);margin-bottom:8px"/>`:'' }
       <input id="jf-img" type="file" accept="image/*" style="font-size:.85rem"/>
       <input id="jf-img-url" type="text" placeholder="หรือวาง URL รูปภาพ" value="${j?.image_url||''}" style="margin-top:6px;font-size:.85rem"/>
@@ -76,6 +101,13 @@ window.showJobForm=function(editId){
       <button class="btn btn-primary" onclick="saveJob(${isEdit?"'"+j.id+"'":'null'})">💾 บันทึก</button>
     </div>`;
   document.getElementById('modal-overlay').classList.add('open');
+  // Init Quill editors after DOM is ready
+  setTimeout(()=>{
+    _quillDesc=initQuill('q-desc','อธิบายหน้าที่ ความรับผิดชอบ ใส่รูปตัวอย่างงานได้...',j?.description||'');
+    _quillReq=initQuill('q-req','คุณสมบัติที่ต้องการ...',j?.requirements||'');
+    _quillBenefits=initQuill('q-benefits','สวัสดิการที่ได้รับ...',j?.benefits||'');
+    _quillDetail=initQuill('q-detail','รายละเอียดเต็ม ใส่ลิงค์ตัวอย่างได้...',j?.detailed_desc||'');
+  },100);
 };
 
 window.saveJob=async function(editId){
@@ -96,6 +128,11 @@ window.saveJob=async function(editId){
   }
   const skillsRaw=document.getElementById('jf-skills').value.trim();
   const skills=skillsRaw?skillsRaw.split(',').map(s=>s.trim()).filter(Boolean):[];
+  // Get rich text content from Quill editors
+  const descHtml=_quillDesc?_quillDesc.root.innerHTML:'';
+  const reqHtml=_quillReq?_quillReq.root.innerHTML:'';
+  const benefitsHtml=_quillBenefits?_quillBenefits.root.innerHTML:'';
+  const detailHtml=_quillDetail?_quillDetail.root.innerHTML:'';
   const payload={
     title,
     department:document.getElementById('jf-dept').value.trim(),
@@ -104,10 +141,10 @@ window.saveJob=async function(editId){
     salary:document.getElementById('jf-salary').value.trim(),
     status:document.getElementById('jf-status').value,
     summary:document.getElementById('jf-summary').value.trim(),
-    description:document.getElementById('jf-desc').value.trim(),
-    requirements:document.getElementById('jf-req').value.trim(),
-    benefits:document.getElementById('jf-benefits').value.trim(),
-    detailed_desc:document.getElementById('jf-detail').value.trim(),
+    description:descHtml==='<p><br></p>'?'':descHtml,
+    requirements:reqHtml==='<p><br></p>'?'':reqHtml,
+    benefits:benefitsHtml==='<p><br></p>'?'':benefitsHtml,
+    detailed_desc:detailHtml==='<p><br></p>'?'':detailHtml,
     image_url:imageUrl,
     skills,
     posted_at:new Date().toISOString()
