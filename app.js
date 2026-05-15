@@ -1,4 +1,4 @@
-const DB={get jobs(){return JSON.parse(localStorage.getItem('jp_jobs')||'[]')},set jobs(v){localStorage.setItem('jp_jobs',JSON.stringify(v))},get apps(){return JSON.parse(localStorage.getItem('jp_apps')||'[]')},set apps(v){localStorage.setItem('jp_apps',JSON.stringify(v))}};
+﻿const DB={get jobs(){return JSON.parse(localStorage.getItem('jp_jobs')||'[]')},set jobs(v){localStorage.setItem('jp_jobs',JSON.stringify(v))},get apps(){return JSON.parse(localStorage.getItem('jp_apps')||'[]')},set apps(v){localStorage.setItem('jp_apps',JSON.stringify(v))}};
 let selJob=null,q='',fd='',ft='';
 const ADMIN_USER='admin',ADMIN_PASS='Huasaii123';
 function isLoggedIn(){return sessionStorage.getItem('jp_admin')==='1'}
@@ -65,9 +65,6 @@ window.submitApp=async function(e){
     const bio=document.getElementById('fa-bio').value.trim();
     const file=window._resumeFile||null;
     if(!jobId)throw new Error('กรุณาเลือกตำแหน่งที่สนใจ');
-    const isUUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(jobId);
-    const safeJobId=isUUID?jobId:null;
-    const jobTitle=document.getElementById('fa-pos').selectedOptions[0]?.text||null;
     if(!fullName)throw new Error('กรุณากรอกชื่อ-นามสกุล');
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new Error('รูปแบบอีเมลไม่ถูกต้อง');
     if(!phone)throw new Error('กรุณากรอกเบอร์โทรศัพท์');
@@ -75,25 +72,60 @@ window.submitApp=async function(e){
       if(file.type!=='application/pdf')throw new Error('รองรับเฉพาะไฟล์ PDF เท่านั้น');
       if(file.size>10*1024*1024)throw new Error('ขนาดไฟล์ต้องไม่เกิน 10MB');
     }
-    const applicantId = crypto.randomUUID();
-    const payload={id:applicantId,job_id:safeJobId,full_name:fullName,email,phone,linkedin_url:linkedin||null,cover_letter:(jobTitle&&!safeJobId?`[ตำแหน่ง: ${jobTitle}] `:'')+(bio||'')};
-    console.log('[ATS] URL:',SUPABASE_URL);
-    console.log('[ATS] payload:',JSON.stringify(payload));
-    const {error:insErr}=await sb.from('applicants').insert([payload]);
-    console.log('[ATS] INSERT err:',insErr);
-    if(insErr){alert(JSON.stringify(insErr));throw new Error('DB: '+insErr.message);}
+    const isUUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(jobId);
+    const safeJobId=isUUID?jobId:null;
+    const jobTitle=document.getElementById('fa-pos').selectedOptions[0]?.text||null;
+    const applicantId=crypto.randomUUID();
+    const payload={id:applicantId,job_id:safeJobId,full_name:fullName,email:email,phone:phone,linkedin_url:linkedin||null,cover_letter:(jobTitle&&!safeJobId?'['+jobTitle+'] ':'')+(bio||'')};
+    console.log('[ATS] Sending to:',SUPABASE_URL+'/rest/v1/applicants');
+    console.log('[ATS] Payload:',JSON.stringify(payload));
+    const res=await fetch(SUPABASE_URL+'/rest/v1/applicants',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'apikey':SUPABASE_ANON,
+        'Authorization':'Bearer '+SUPABASE_ANON,
+        'Prefer':'return=minimal'
+      },
+      body:JSON.stringify(payload)
+    });
+    console.log('[ATS] HTTP Status:',res.status,res.statusText);
+    if(!res.ok){
+      const errText=await res.text();
+      console.error('[ATS] Server Error:',errText);
+      throw new Error('Server: '+errText);
+    }
     if(file){
-      const path=`${applicantId}/resume.pdf`;
-      const {error:upErr}=await sb.storage.from('resumes').upload(path,file,{contentType:'application/pdf'});
-      if(upErr)throw upErr;
-      await sb.from('applicants').update({resume_path:path,resume_filename:file.name}).eq('id',applicantId);
+      const path=applicantId+'/resume.pdf';
+      const upRes=await fetch(SUPABASE_URL+'/storage/v1/object/resumes/'+path,{
+        method:'POST',
+        headers:{
+          'apikey':SUPABASE_ANON,
+          'Authorization':'Bearer '+SUPABASE_ANON,
+          'Content-Type':'application/pdf'
+        },
+        body:file
+      });
+      if(!upRes.ok)console.warn('[ATS] Upload warning:',await upRes.text());
+      else{
+        await fetch(SUPABASE_URL+'/rest/v1/applicants?id=eq.'+applicantId,{
+          method:'PATCH',
+          headers:{
+            'Content-Type':'application/json',
+            'apikey':SUPABASE_ANON,
+            'Authorization':'Bearer '+SUPABASE_ANON,
+            'Prefer':'return=minimal'
+          },
+          body:JSON.stringify({resume_path:path,resume_filename:file.name})
+        });
+      }
     }
     window._resumeFile=null;
     document.getElementById('page-apply').innerHTML=`<div class="apply-container"><div class="success-screen"><div class="success-icon">✅</div><h2>ส่งใบสมัครสำเร็จ!</h2><p class="text-muted">ทีมงานจะติดต่อกลับภายใน 3-5 วันทำการ</p><div style="margin-top:32px;display:flex;gap:12px;justify-content:center"><button class="btn btn-secondary" onclick="navigate('home')">ดูตำแหน่งอื่น</button><button class="btn btn-primary" onclick="navigate('apply')">สมัครอีกครั้ง</button></div></div></div>`;
     toast('ส่งใบสมัครเรียบร้อย! 🎉');
   }catch(err){
     console.error('[ATS] Error:',err);
-    toast(err.message||'เกิดข้อผิดพลาด กรุณาลองใหม่','error');
+    toast(err.message||'เกิดข้อผิดพลาด','error');
     btn.disabled=false;btn.textContent='ส่งใบสมัคร';
   }
 };
