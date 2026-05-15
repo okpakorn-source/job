@@ -6,8 +6,8 @@ window.setAIKey=function(){
   if(key){sessionStorage.setItem('openai_key',key.trim());toast('บันทึก API Key เรียบร้อย ✅')}
 };
 
-async function extractPdfText(url){
-  const pdf=await pdfjsLib.getDocument(url).promise;
+async function extractPdfText(arrayBuffer){
+  const pdf=await pdfjsLib.getDocument({data:arrayBuffer}).promise;
   let text='';
   for(let i=1;i<=pdf.numPages;i++){
     const page=await pdf.getPage(i);
@@ -24,35 +24,53 @@ window.analyzeResume=async function(id){
   if(!app||!app.resume_path){toast('ไม่พบ Resume สำหรับวิเคราะห์','error');return}
   toast('🤖 กำลังวิเคราะห์ Resume... รอสักครู่');
   try{
-    // 1. Get signed URL
-    const signRes=await fetch(SUPABASE_URL+'/storage/v1/object/sign/resumes/'+app.resume_path,{
-      method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON},
-      body:JSON.stringify({expiresIn:600})
+    // 1. Download PDF as blob via authenticated fetch
+    const dlRes=await fetch(SUPABASE_URL+'/storage/v1/object/authenticated/resumes/'+app.resume_path,{
+      headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}
     });
-    if(!signRes.ok)throw new Error('ไม่สามารถเข้าถึง Resume ได้');
-    const signData=await signRes.json();
-    const pdfUrl=SUPABASE_URL+'/storage/v1'+signData.signedURL;
-    // 2. Extract text
-    const resumeText=await extractPdfText(pdfUrl);
-    if(!resumeText||resumeText.length<20)throw new Error('ไม่สามารถอ่านข้อความจาก PDF ได้');
+    if(!dlRes.ok){
+      // Fallback: try public URL
+      const dl2=await fetch(SUPABASE_URL+'/storage/v1/object/public/resumes/'+app.resume_path);
+      if(!dl2.ok)throw new Error('ไม่สามารถดาวน์โหลด Resume ได้');
+      var pdfBuffer=await dl2.arrayBuffer();
+    }else{
+      var pdfBuffer=await dlRes.arrayBuffer();
+    }
+    // 2. Extract text from PDF buffer
+    let resumeText='';
+    try{
+      resumeText=await extractPdfText(pdfBuffer);
+    }catch(e){
+      console.warn('[AI] pdf.js error:',e);
+    }
     const jobTitle=app.jobs?app.jobs.title:'ไม่ระบุตำแหน่ง';
-    // 3. Call OpenAI
+    // 3. If text extraction failed, send as base64 image to GPT-4o
+    let messages;
+    if(!resumeText||resumeText.length<30){
+      const base64=btoa(new Uint8Array(pdfBuffer).reduce((d,b)=>d+String.fromCharCode(b),''));
+      messages=[
+        {role:'system',content:'คุณเป็นผู้เชี่ยวชาญ HR ด้านการคัดกรอง Resume ให้คะแนนและวิเคราะห์ผู้สมัครงาน ตอบเป็น JSON เท่านั้น'},
+        {role:'user',content:[
+          {type:'text',text:'วิเคราะห์ Resume นี้สำหรับตำแหน่ง "'+jobTitle+'"\n\nตอบเป็น JSON:\n{"overall_score":0-100,"skill_score":0-100,"experience_score":0-100,"education_score":0-100,"communication_score":0-100,"tier":"top|strong|average|weak","summary":"สรุป 2-3 ประโยค","recommendation":"คำแนะนำ","strengths":["จุดแข็ง"],"improvements":["จุดที่ควรพัฒนา"]}'},
+          {type:'image_url',image_url:{url:'data:application/pdf;base64,'+base64}}
+        ]}
+      ];
+    }else{
+      messages=[
+        {role:'system',content:'คุณเป็นผู้เชี่ยวชาญ HR ด้านการคัดกรอง Resume ให้คะแนนและวิเคราะห์ผู้สมัครงาน ตอบเป็น JSON เท่านั้น'},
+        {role:'user',content:'วิเคราะห์ Resume นี้สำหรับตำแหน่ง "'+jobTitle+'"\n\nResume:\n'+resumeText.slice(0,6000)+'\n\nตอบเป็น JSON:\n{"overall_score":0-100,"skill_score":0-100,"experience_score":0-100,"education_score":0-100,"communication_score":0-100,"tier":"top|strong|average|weak","summary":"สรุป 2-3 ประโยค","recommendation":"คำแนะนำ","strengths":["จุดแข็ง"],"improvements":["จุดที่ควรพัฒนา"]}'}
+      ];
+    }
+    // 4. Call OpenAI
     const aiRes=await fetch('https://api.openai.com/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+sessionStorage.getItem('openai_key')},
-      body:JSON.stringify({
-        model:'gpt-4o-mini',
-        response_format:{type:'json_object'},
-        messages:[
-          {role:'system',content:'คุณเป็นผู้เชี่ยวชาญ HR ด้านการคัดกรอง Resume ให้คะแนนและวิเคราะห์ผู้สมัครงาน ตอบเป็น JSON เท่านั้น'},
-          {role:'user',content:`วิเคราะห์ Resume นี้สำหรับตำแหน่ง "${jobTitle}"\n\nResume:\n${resumeText.slice(0,4000)}\n\nตอบเป็น JSON:\n{"overall_score":0-100,"skill_score":0-100,"experience_score":0-100,"education_score":0-100,"communication_score":0-100,"tier":"top|strong|average|weak","summary":"สรุปภาพรวม 2-3 ประโยค","recommendation":"คำแนะนำ 1-2 ประโยค","strengths":["จุดแข็ง1","จุดแข็ง2"],"improvements":["จุดที่ควรพัฒนา1"]}`}
-        ]
-      })
+      body:JSON.stringify({model:'gpt-4o-mini',response_format:{type:'json_object'},messages:messages})
     });
     if(!aiRes.ok){const e=await aiRes.json();throw new Error(e.error?.message||'OpenAI Error')}
     const aiData=await aiRes.json();
     const analysis=JSON.parse(aiData.choices[0].message.content);
-    // 4. Save to Supabase
+    // 5. Save to Supabase
     await fetch(SUPABASE_URL+'/rest/v1/applicants?id=eq.'+id,{
       method:'PATCH',
       headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'},
@@ -64,7 +82,7 @@ window.analyzeResume=async function(id){
         ai_recommendation:analysis.recommendation
       })
     });
-    // 5. Update local data
+    // 6. Update local data
     Object.assign(app,{ai_analyzed:true,ai_summary:analysis,ai_score_overall:analysis.overall_score,ai_tier:analysis.tier,ai_recommendation:analysis.recommendation,ai_score_skill:analysis.skill_score,ai_score_exp:analysis.experience_score,ai_score_edu:analysis.education_score,ai_score_comm:analysis.communication_score});
     toast('วิเคราะห์สำเร็จ! คะแนน: '+analysis.overall_score+'/100 🎯');
     filterApplicants();
