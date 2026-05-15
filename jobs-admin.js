@@ -7,13 +7,14 @@ window.renderJobManager=function(){
 };
 
 async function loadJobsData(){
-  const res=await fetch(SUPABASE_URL+'/rest/v1/jobs?select=*&order=posted.desc',{
+  const res=await fetch(SUPABASE_URL+'/rest/v1/jobs?select=*&order=posted_at.desc',{
     headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}
   });
   const jobs=res.ok?await res.json():[];
   window._adminJobs=jobs;
   const el=document.getElementById('admin-main');
   const open=jobs.filter(j=>j.status==='open').length;
+  const salDisplay=j=>j.salary?j.salary:j.salary_min?'฿'+j.salary_min.toLocaleString()+(j.salary_max?'–฿'+j.salary_max.toLocaleString():''):'';
   el.innerHTML=`
     <div class="admin-header"><h2>📋 จัดการตำแหน่งงาน</h2><button class="btn btn-primary btn-sm" onclick="showJobForm()">+ เพิ่มตำแหน่งใหม่</button></div>
     <div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));margin-bottom:20px">
@@ -31,7 +32,7 @@ async function loadJobsData(){
             <span style="padding:2px 10px;border-radius:100px;font-size:.72rem;font-weight:600;background:${isOpen?'rgba(34,197,94,.12)':'rgba(239,68,68,.12)'};color:${isOpen?'#22c55e':'#ef4444'}">${isOpen?'เปิดรับ':'ปิดรับ'}</span>
           </div>
           <div style="font-size:.83rem;color:var(--text3)">${j.department||''} · ${j.type||''} · ${j.location||''}</div>
-          <div style="font-size:.82rem;color:var(--text2);margin-top:4px">${j.salary?'💰 '+j.salary:''}</div>
+          <div style="font-size:.82rem;color:var(--text2);margin-top:4px">${salDisplay(j)?'💰 '+salDisplay(j):''}</div>
           ${j.summary?`<div style="font-size:.82rem;color:var(--text3);margin-top:6px">${j.summary}</div>`:''}
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
@@ -47,6 +48,7 @@ window.showJobForm=function(editId){
   const jobs=window._adminJobs||[];
   const j=editId?jobs.find(x=>x.id==editId):null;
   const isEdit=!!j;
+  const salVal=j?(j.salary||(j.salary_min?j.salary_min+(j.salary_max?'-'+j.salary_max:''):'')):'';
   document.getElementById('modal-box').innerHTML=`
     <h2>${isEdit?'✏️ แก้ไขตำแหน่ง':'+ เพิ่มตำแหน่งใหม่'}</h2>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -54,7 +56,7 @@ window.showJobForm=function(editId){
       <div class="form-group"><label>แผนก</label><input id="jf-dept" value="${j?.department||''}"/></div>
       <div class="form-group"><label>ประเภท</label><select id="jf-type"><option value="Full-time" ${j?.type==='Full-time'?'selected':''}>Full-time</option><option value="Part-time" ${j?.type==='Part-time'?'selected':''}>Part-time</option><option value="Contract" ${j?.type==='Contract'?'selected':''}>Contract</option><option value="Freelance" ${j?.type==='Freelance'?'selected':''}>Freelance</option><option value="Intern" ${j?.type==='Intern'?'selected':''}>Intern</option></select></div>
       <div class="form-group"><label>สถานที่</label><input id="jf-loc" value="${j?.location||''}"/></div>
-      <div class="form-group"><label>เงินเดือน</label><input id="jf-salary" value="${j?.salary||''}" placeholder="เช่น 50,000 – 80,000"/></div>
+      <div class="form-group"><label>เงินเดือน</label><input id="jf-salary" value="${salVal}" placeholder="เช่น 50000-80000"/></div>
       <div class="form-group"><label>สถานะ</label><select id="jf-status"><option value="open" ${j?.status==='open'?'selected':''}>เปิดรับ</option><option value="closed" ${j?.status!=='open'?'selected':''}>ปิดรับ</option></select></div>
     </div>
     <div class="form-group" style="margin-top:12px"><label>สรุปสั้น</label><input id="jf-summary" value="${j?.summary||''}" placeholder="สรุป 1-2 ประโยค"/></div>
@@ -79,7 +81,6 @@ window.showJobForm=function(editId){
 window.saveJob=async function(editId){
   const title=document.getElementById('jf-title').value.trim();
   if(!title){toast('กรุณากรอกชื่อตำแหน่ง','error');return}
-  // Upload image if selected
   let imageUrl=document.getElementById('jf-img-url').value.trim();
   const fileInput=document.getElementById('jf-img');
   if(fileInput.files.length>0){
@@ -109,7 +110,7 @@ window.saveJob=async function(editId){
     detailed_desc:document.getElementById('jf-detail').value.trim(),
     image_url:imageUrl,
     skills,
-    posted:new Date().toISOString().slice(0,10)
+    posted_at:new Date().toISOString()
   };
   try{
     let res;
@@ -164,7 +165,6 @@ window.deleteJob=async function(id,title){
   }catch(err){toast('Error: '+err.message,'error')}
 };
 
-// Delete applicant
 window.deleteApplicant=async function(id,name){
   if(!confirm('ลบใบสมัครของ "'+name+'" ?\n\nข้อมูลจะถูกลบถาวร'))return;
   try{
