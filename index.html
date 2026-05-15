@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JobPortal Pro — ระบบสมัครงานออนไลน์</title>
+  <meta name="description" content="ระบบสมัครงานออนไลน์มืออาชีพ ค้นหาและสมัครงานที่ใช่สำหรับคุณ" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Navbar -->
+    <nav class="navbar" id="navbar">
+      <div class="nav-container">
+        <div class="nav-brand" onclick="navigate('home')">
+          <div class="brand-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+              <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+            </svg>
+          </div>
+          <span class="brand-name">JobPortal<span class="brand-accent">Pro</span></span>
+        </div>
+        <div class="nav-links">
+          <button class="nav-btn" id="nav-home" onclick="navigate('home')">ตำแหน่งงาน</button>
+          <button class="nav-btn" id="nav-apply" onclick="navigate('apply')">สมัครงาน</button>
+          <button class="nav-btn admin-btn" id="nav-admin" onclick="navigate('admin')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 3a3 3 0 1 1-3 3 3 3 0 0 1 3-3zm0 14.2a7.2 7.2 0 0 1-6-3.22c.03-1.99 4-3.08 6-3.08s5.97 1.09 6 3.08a7.2 7.2 0 0 1-6 3.22z"/>
+            </svg>
+            Admin
+          </button>
+        </div>
+        <button class="hamburger" id="hamburger" onclick="toggleMenu()">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+      <div class="mobile-menu" id="mobile-menu">
+        <button onclick="navigate('home'); toggleMenu()">ตำแหน่งงาน</button>
+        <button onclick="navigate('apply'); toggleMenu()">สมัครงาน</button>
+        <button onclick="navigate('admin'); toggleMenu()">Admin</button>
+      </div>
+    </nav>
+
+    <!-- Pages -->
+    <div id="page-home" class="page active"></div>
+    <div id="page-detail" class="page"></div>
+    <div id="page-apply" class="page"></div>
+    <div id="page-admin" class="page"></div>
+  </div>
+
+  <div id="toast-container"></div>
+  <div id="modal-overlay" class="modal-overlay" onclick="closeModal()">
+    <div id="modal-box" class="modal-box" onclick="event.stopPropagation()"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
