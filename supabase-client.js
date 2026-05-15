@@ -46,7 +46,9 @@ async function submitApplication({ fields, file }) {
     .select('id')
     .single();
 
-  if (insertErr) throw insertErr;
+  console.log('INSERT RESPONSE', applicant);
+  console.error('INSERT ERROR', insertErr);
+  if (insertErr) { alert(JSON.stringify(insertErr)); throw insertErr; }
 
   // 2. Upload PDF to storage: resumes/{applicant_id}/resume.pdf
   if (file) {
