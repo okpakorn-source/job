@@ -24,21 +24,21 @@ async function pdfToImages(pdfBlob,maxPages){
 }
 
 const TOP15_UNI = [
-  "จุฬาลงกรณ์","Chulalongkorn",
-  "มหิดล","Mahidol",
-  "เชียงใหม่","Chiang Mai",
-  "ธรรมศาสตร์","Thammasat",
-  "เกษตรศาสตร์","Kasetsart",
-  "ขอนแก่น","Khon Kaen",
-  "สงขลานครินทร์","Prince of Songkla",
-  "ลาดกระบัง","Ladkrabang","KMITL",
-  "พระจอมเกล้าธนบุรี","Thonburi","KMUTT",
-  "พระจอมเกล้าพระนครเหนือ","North Bangkok","KMUTNB",
-  "ศรีนครินทรวิโรฒ","Srinakharinwirot",
-  "บูรพา","Burapha",
-  "แม่ฟ้าหลวง","Mae Fah Luang",
-  "สุรนารี","Suranaree",
-  "ศิลปากร","Silpakorn"
+  "จุฬาลงกรณ์","Chulalongkorn","จุฬาฯ","CU ",
+  "มหิดล","Mahidol","MU ",
+  "เชียงใหม่","Chiang Mai","CMU","มช.",
+  "ธรรมศาสตร์","Thammasat","มธ.","TU ",
+  "เกษตรศาสตร์","Kasetsart","มก.","KU ",
+  "ขอนแก่น","Khon Kaen","มข.","KKU",
+  "สงขลานครินทร์","Prince of Songkla","มอ.","PSU",
+  "ลาดกระบัง","Ladkrabang","KMITL","สจล.","สจล",
+  "พระจอมเกล้าธนบุรี","Thonburi","KMUTT","มจธ.","มจธ","บางมด",
+  "พระจอมเกล้าพระนครเหนือ","North Bangkok","KMUTNB","มจพ.","มจพ",
+  "ศรีนครินทรวิโรฒ","Srinakharinwirot","มศว","SWU",
+  "บูรพา","Burapha","BUU",
+  "แม่ฟ้าหลวง","Mae Fah Luang","MFU","มฟล",
+  "สุรนารี","Suranaree","SUT","มทส",
+  "ศิลปากร","Silpakorn","SU "
 ];
 
 function buildPrompt(jobTitle,jobDesc,jobReq){
@@ -84,14 +84,15 @@ window.analyzeResume=async function(id,promptId){
     const raw=aiData.choices[0].message.content;
     console.log('[AI] Raw:',raw);
     const r=JSON.parse(raw);
-    // Calculate scores locally
+    // Calculate scores locally — check both thai and english uni names
     let uniScore=0;
-    const uniName=(r.university||'').toLowerCase();
+    const uniCheck=((r.university||'')+' '+(r.university_en||'')).toLowerCase();
     for(let i=0;i<TOP15_UNI.length;i++){
-      if(uniName.includes(TOP15_UNI[i].toLowerCase())){
+      if(uniCheck.includes(TOP15_UNI[i].toLowerCase().trim())){
         uniScore=15;break;
       }
     }
+    console.log('[AI] Uni:',r.university,r.university_en,'| Score:',uniScore,'| GPA:',r.gpa);
     const gpa=Number(r.gpa)||0;
     let gpaScore=0;
     if(gpa>=3.80)gpaScore=10;
