@@ -166,9 +166,11 @@ const STATUS_MAP={
   rejected:{label:'ไม่ผ่าน',color:'#ef4444',bg:'rgba(239,68,68,.12)'}
 };
 
+let _sortCol='applied_at',_sortAsc=false;
+
 async function renderAdmin(){
   const adminEl=document.getElementById('page-admin');
-  adminEl.innerHTML=`<div class="admin-layout"><aside class="admin-sidebar"><div class="sidebar-title">เมนู Admin</div><button class="sidebar-btn active" onclick="renderAdmin()">👥 ผู้สมัครงาน</button><button class="sidebar-btn" onclick="navigate('home')">🏠 หน้าหลัก</button><button class="sidebar-btn" style="color:var(--red);margin-top:auto" onclick="adminLogout()">🚪 ออกจากระบบ</button></aside><div class="admin-content"><div class="admin-header"><h2>👥 ผู้สมัครงาน</h2><button class="btn btn-secondary" onclick="renderAdmin()">🔄 รีเฟรช</button></div><div class="stats-grid" id="ad-stats"><div class="stat-card blue"><div class="stat-card-num">—</div><div class="stat-card-label">ผู้สมัครทั้งหมด</div></div><div class="stat-card green"><div class="stat-card-num">—</div><div class="stat-card-label">ตำแหน่งเปิดรับ</div></div><div class="stat-card purple"><div class="stat-card-num">—</div><div class="stat-card-label">ใบสมัครใหม่</div></div><div class="stat-card cyan"><div class="stat-card-num">—</div><div class="stat-card-label">รอสัมภาษณ์</div></div></div><div id="ad-filter" style="margin-bottom:20px;display:flex;gap:12px;flex-wrap:wrap"><select id="af-status" onchange="filterApplicants()" style="padding:8px 14px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);border-radius:var(--r2);font-family:inherit"><option value="">ทุกสถานะ</option><option value="new">ใหม่</option><option value="reviewing">กำลังพิจารณา</option><option value="shortlisted">ผ่านคัดเลือก</option><option value="interview">นัดสัมภาษณ์</option><option value="offered">เสนอตำแหน่ง</option><option value="hired">รับเข้าทำงาน</option><option value="rejected">ไม่ผ่าน</option></select><input id="af-search" type="text" placeholder="ค้นหาชื่อ/อีเมล..." oninput="filterApplicants()" style="padding:8px 14px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);border-radius:var(--r2);font-family:inherit;flex:1;min-width:200px"/></div><div id="ad-list"><div class="empty-state"><div class="empty-icon">⏳</div><h3>กำลังโหลดข้อมูล...</h3></div></div></div></div>`;
+  adminEl.innerHTML=`<div class="admin-layout"><aside class="admin-sidebar"><div class="sidebar-title">เมนู Admin</div><button class="sidebar-btn active" onclick="renderAdmin()">👥 ผู้สมัครงาน</button><button class="sidebar-btn" onclick="setAIKey()">🔑 ตั้งค่า AI Key</button><button class="sidebar-btn" onclick="navigate('home')">🏠 หน้าหลัก</button><button class="sidebar-btn" style="color:var(--red);margin-top:auto" onclick="adminLogout()">🚪 ออกจากระบบ</button></aside><div class="admin-content"><div class="admin-header"><h2>👥 ผู้สมัครงาน</h2><div style="display:flex;gap:8px"><button class="btn btn-success btn-sm" onclick="exportCSV()">📥 Export CSV</button><button class="btn btn-secondary btn-sm" onclick="renderAdmin()">🔄 รีเฟรช</button></div></div><div class="stats-grid" id="ad-stats"><div class="stat-card blue"><div class="stat-card-num">—</div><div class="stat-card-label">ผู้สมัครทั้งหมด</div></div><div class="stat-card green"><div class="stat-card-num">—</div><div class="stat-card-label">ตำแหน่งเปิดรับ</div></div><div class="stat-card purple"><div class="stat-card-num">—</div><div class="stat-card-label">ใบสมัครใหม่</div></div><div class="stat-card cyan"><div class="stat-card-num">—</div><div class="stat-card-label">รอสัมภาษณ์</div></div></div><div id="ad-filter" style="margin-bottom:20px;display:flex;gap:12px;flex-wrap:wrap"><select id="af-status" onchange="filterApplicants()" style="padding:8px 14px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);border-radius:var(--r2);font-family:inherit"><option value="">ทุกสถานะ</option><option value="new">ใหม่</option><option value="reviewing">กำลังพิจารณา</option><option value="shortlisted">ผ่านคัดเลือก</option><option value="interview">นัดสัมภาษณ์</option><option value="offered">เสนอตำแหน่ง</option><option value="hired">รับเข้าทำงาน</option><option value="rejected">ไม่ผ่าน</option></select><input id="af-search" type="text" placeholder="ค้นหาชื่อ/อีเมล..." oninput="filterApplicants()" style="padding:8px 14px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);border-radius:var(--r2);font-family:inherit;flex:1;min-width:200px"/></div><div id="ad-list"><div class="empty-state"><div class="empty-icon">⏳</div><h3>กำลังโหลดข้อมูล...</h3></div></div></div></div>`;
 
   try{
     const apRes=await fetch(SUPABASE_URL+'/rest/v1/applicants?select=*,jobs(title,department)&order=applied_at.desc',{
@@ -185,6 +187,7 @@ async function renderAdmin(){
     const stats=document.getElementById('ad-stats');
     if(stats){
       const apps=window._adminApps;
+      const hired=apps.filter(a=>a.status==='hired').length;
       stats.innerHTML=`
         <div class="stat-card blue"><div class="stat-card-num">${apps.length}</div><div class="stat-card-label">ผู้สมัครทั้งหมด</div></div>
         <div class="stat-card green"><div class="stat-card-num">${jobs.filter(j=>j.status==='open').length}</div><div class="stat-card-label">ตำแหน่งเปิดรับ</div></div>
@@ -205,8 +208,33 @@ window.filterApplicants=function(){
   let filtered=apps;
   if(sf)filtered=filtered.filter(a=>a.status===sf);
   if(sq)filtered=filtered.filter(a=>(a.full_name||'').toLowerCase().includes(sq)||(a.email||'').toLowerCase().includes(sq));
+  filtered=sortApplicants(filtered);
   renderApplicantList(filtered);
 };
+
+function sortApplicants(apps){
+  return [...apps].sort((a,b)=>{
+    let va,vb;
+    if(_sortCol==='full_name'){va=(a.full_name||'').toLowerCase();vb=(b.full_name||'').toLowerCase()}
+    else if(_sortCol==='job'){va=a.jobs?a.jobs.title:'';vb=b.jobs?b.jobs.title:''}
+    else if(_sortCol==='status'){va=a.status||'';vb=b.status||''}
+    else{va=a.applied_at||'';vb=b.applied_at||''}
+    if(va<vb)return _sortAsc?-1:1;
+    if(va>vb)return _sortAsc?1:-1;
+    return 0;
+  });
+}
+
+window.sortBy=function(col){
+  if(_sortCol===col)_sortAsc=!_sortAsc;
+  else{_sortCol=col;_sortAsc=col==='full_name'}
+  filterApplicants();
+};
+
+function sortIcon(col){
+  if(_sortCol!==col)return '<span style="opacity:.3">⇅</span>';
+  return _sortAsc?'<span style="color:var(--accent)">↑</span>':'<span style="color:var(--accent)">↓</span>';
+}
 
 function renderApplicantList(apps){
   const el=document.getElementById('ad-list');
@@ -216,18 +244,19 @@ function renderApplicantList(apps){
     return;
   }
   const statusOpts=Object.entries(STATUS_MAP).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
-  el.innerHTML=`<div class="admin-table-wrap"><table><thead><tr><th>ผู้สมัคร</th><th>ตำแหน่ง</th><th>วันที่สมัคร</th><th>สถานะ</th><th>Resume</th><th>จัดการ</th></tr></thead><tbody>${apps.map(a=>{
+  el.innerHTML=`<div class="admin-table-wrap"><table><thead><tr><th onclick="sortBy('full_name')" style="cursor:pointer">ผู้สมัคร ${sortIcon('full_name')}</th><th onclick="sortBy('job')" style="cursor:pointer">ตำแหน่ง ${sortIcon('job')}</th><th onclick="sortBy('applied_at')" style="cursor:pointer">วันที่สมัคร ${sortIcon('applied_at')}</th><th onclick="sortBy('status')" style="cursor:pointer">สถานะ ${sortIcon('status')}</th><th>Resume</th><th>จัดการ</th></tr></thead><tbody>${apps.map(a=>{
     const st=STATUS_MAP[a.status]||STATUS_MAP.new;
     const jobName=a.jobs?a.jobs.title:'—';
     const dept=a.jobs?a.jobs.department:'';
     const dt=a.applied_at?new Date(a.applied_at).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}):'—';
+    const hasNote=a.admin_notes?'<span title="มีโน้ต" style="margin-left:4px">📝</span>':'';
     return `<tr>
-      <td><div style="font-weight:600">${a.full_name||'—'}</div><div style="font-size:.8rem;color:var(--text3)">${a.email||''}</div><div style="font-size:.78rem;color:var(--text3)">${a.phone||''}</div></td>
+      <td><div style="font-weight:600">${a.full_name||'—'}${hasNote}</div><div style="font-size:.8rem;color:var(--text3)">${a.email||''}</div><div style="font-size:.78rem;color:var(--text3)">${a.phone||''}</div></td>
       <td><span class="badge badge-dept">${jobName}</span>${dept?`<div style="font-size:.75rem;color:var(--text3);margin-top:4px">${dept}</div>`:''}</td>
       <td style="font-size:.85rem;color:var(--text2)">${dt}</td>
       <td><select onchange="updateStatus('${a.id}',this.value)" style="padding:5px 10px;background:${st.bg};color:${st.color};border:1px solid ${st.color}33;border-radius:100px;font-size:.78rem;font-weight:600;font-family:inherit;cursor:pointer">${statusOpts.replace(`value="${a.status}"`,`value="${a.status}" selected`)}</select></td>
       <td>${a.resume_path?`<button class="btn btn-sm btn-secondary" onclick="downloadResume('${a.id}','${a.resume_path}','${(a.resume_filename||'resume.pdf').replace(/'/g,"\\'")}')">📄 ดาวน์โหลด</button>`:'<span style="color:var(--text3);font-size:.8rem">ไม่มีไฟล์</span>'}</td>
-      <td><button class="btn btn-sm btn-primary" onclick="viewApplicant('${a.id}')">👁 ดู</button></td>
+      <td style="white-space:nowrap"><button class="btn btn-sm btn-primary" onclick="viewApplicant('${a.id}')">👁</button> ${a.resume_path?`<button class="btn btn-sm" style="background:rgba(139,92,246,.12);color:#8b5cf6;border:1px solid rgba(139,92,246,.3)" onclick="analyzeResume('${a.id}')">${a.ai_analyzed?'🎯 '+a.ai_score_overall:'🤖 AI'}</button>`:''}</td>
     </tr>`;
   }).join('')}</tbody></table></div>`;
 }
@@ -245,6 +274,23 @@ window.updateStatus=async function(id,status){
     toast('อัปเดตสถานะเรียบร้อย ✅');
   }catch(err){
     toast('อัปเดตไม่สำเร็จ: '+err.message,'error');
+  }
+};
+
+window.saveNote=async function(id){
+  const note=document.getElementById('note-'+id)?.value||'';
+  try{
+    const res=await fetch(SUPABASE_URL+'/rest/v1/applicants?id=eq.'+id,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'},
+      body:JSON.stringify({admin_notes:note})
+    });
+    if(!res.ok)throw new Error(await res.text());
+    const app=window._adminApps.find(a=>a.id===id);
+    if(app)app.admin_notes=note;
+    toast('บันทึกโน้ตเรียบร้อย 📝');
+  }catch(err){
+    toast('บันทึกไม่สำเร็จ: '+err.message,'error');
   }
 };
 
@@ -267,6 +313,32 @@ window.downloadResume=async function(id,path,filename){
   }
 };
 
+window.exportCSV=function(){
+  const apps=window._adminApps||[];
+  if(!apps.length){toast('ไม่มีข้อมูลสำหรับ Export','warning');return}
+  const headers=['ชื่อ-นามสกุล','อีเมล','เบอร์โทร','ตำแหน่ง','แผนก','สถานะ','วันที่สมัคร','LinkedIn','แนะนำตัว','โน้ต Admin'];
+  const rows=apps.map(a=>[
+    a.full_name||'',
+    a.email||'',
+    a.phone||'',
+    a.jobs?a.jobs.title:'',
+    a.jobs?a.jobs.department:'',
+    (STATUS_MAP[a.status]||{}).label||a.status,
+    a.applied_at?new Date(a.applied_at).toLocaleDateString('th-TH'):'',
+    a.linkedin_url||'',
+    (a.cover_letter||'').replace(/[\n\r]+/g,' '),
+    (a.admin_notes||'').replace(/[\n\r]+/g,' ')
+  ]);
+  const csvContent='\uFEFF'+[headers,...rows].map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob([csvContent],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='applicants_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);a.click();a.remove();
+  URL.revokeObjectURL(url);
+  toast('Export CSV สำเร็จ! 📥');
+};
+
 window.viewApplicant=function(id){
   const a=(window._adminApps||[]).find(x=>x.id===id);
   if(!a)return;
@@ -287,11 +359,11 @@ window.viewApplicant=function(id){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
       <div class="info-card" style="padding:14px">
         <div style="font-size:.75rem;color:var(--text3);margin-bottom:4px">อีเมล</div>
-        <div style="font-weight:600">${a.email||'—'}</div>
+        <div style="font-weight:600"><a href="mailto:${a.email}" style="color:var(--accent)">${a.email||'—'}</a></div>
       </div>
       <div class="info-card" style="padding:14px">
         <div style="font-size:.75rem;color:var(--text3);margin-bottom:4px">เบอร์โทร</div>
-        <div style="font-weight:600">${a.phone||'—'}</div>
+        <div style="font-weight:600"><a href="tel:${a.phone}" style="color:var(--accent)">${a.phone||'—'}</a></div>
       </div>
       <div class="info-card" style="padding:14px">
         <div style="font-size:.75rem;color:var(--text3);margin-bottom:4px">ตำแหน่งที่สมัคร</div>
@@ -303,8 +375,15 @@ window.viewApplicant=function(id){
       </div>
     </div>
     ${a.cover_letter?`<div style="margin-bottom:20px"><div style="font-size:.85rem;font-weight:600;color:var(--text2);margin-bottom:8px">แนะนำตัว / Cover Letter</div><div style="background:var(--bg2);padding:16px;border-radius:var(--r2);border:1px solid var(--border2);color:var(--text2);font-size:.9rem;line-height:1.7;white-space:pre-wrap">${a.cover_letter}</div></div>`:''}
+    ${typeof renderAIResults==='function'?renderAIResults(a):''}
+    <div style="margin-bottom:20px">
+      <div style="font-size:.85rem;font-weight:600;color:var(--text2);margin-bottom:8px">📝 โน้ต Admin</div>
+      <textarea id="note-${a.id}" rows="3" placeholder="เพิ่มโน้ตสำหรับผู้สมัครคนนี้..." style="width:100%;background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:12px;border-radius:var(--r2);font-family:inherit;font-size:.9rem;resize:vertical">${a.admin_notes||''}</textarea>
+      <button class="btn btn-sm btn-primary" style="margin-top:8px" onclick="saveNote('${a.id}')">💾 บันทึกโน้ต</button>
+    </div>
     <div class="form-actions">
-      ${a.resume_path?`<button class="btn btn-success" onclick="downloadResume('${a.id}','${a.resume_path}','${(a.resume_filename||'resume.pdf').replace(/'/g,"\\'")}')">📄 ดาวน์โหลด Resume</button>`:''}
+      ${a.resume_path?`<button class="btn btn-success" onclick="downloadResume('${a.id}','${a.resume_path}','${(a.resume_filename||'resume.pdf').replace(/'/g,"\\'")}')">📄 Resume</button>`:''}
+      ${a.resume_path?`<button class="btn" style="background:rgba(139,92,246,.15);color:#8b5cf6;border:1px solid rgba(139,92,246,.3)" onclick="analyzeResume('${a.id}')">🤖 ${a.ai_analyzed?'วิเคราะห์ใหม่':'AI วิเคราะห์'}</button>`:''}
       <button class="btn btn-secondary" onclick="closeModal()">ปิด</button>
     </div>`;
   document.getElementById('modal-overlay').classList.add('open');
