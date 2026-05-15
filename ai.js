@@ -82,7 +82,7 @@ window.analyzeResume=async function(id,promptId){
     const aiRes=await fetch('https://api.openai.com/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
-      body:JSON.stringify({model:'gpt-4o-mini',response_format:{type:'json_object'},max_tokens:4000,messages:[{role:'user',content:content}]})
+      body:JSON.stringify({model:'gpt-4o-mini',response_format:{type:'json_object'},max_tokens:4000,messages:[{role:'system',content:'คุณเป็นผู้เชี่ยวชาญด้าน HR วิเคราะห์ Resume ตอบเป็น JSON เท่านั้น'},{role:'user',content:content}]})
     });
     if(!aiRes.ok){const e=await aiRes.json();throw new Error(e.error?.message||'OpenAI Error')}
     const aiData=await aiRes.json();
