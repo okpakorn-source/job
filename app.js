@@ -155,21 +155,159 @@ function renderAdminLogin(){
   </div>`;
   setTimeout(()=>document.getElementById('li-u')&&document.getElementById('li-u').focus(),100);
 }
-function renderAdmin(){
-  const jobs=DB.jobs,apps=DB.apps;
-  document.getElementById('page-admin').innerHTML=`<div class="admin-layout"><aside class="admin-sidebar"><div class="sidebar-title">เมนู Admin</div><button class="sidebar-btn active">📋 จัดการตำแหน่งงาน</button><button class="sidebar-btn" onclick="navigate('home')">🏠 หน้าหลัก</button><button class="sidebar-btn" style="color:var(--red);margin-top:auto" onclick="adminLogout()">🚪 ออกจากระบบ</button></aside><div class="admin-content"><div class="admin-header"><h2>จัดการตำแหน่งงาน</h2><button class="btn btn-primary" onclick="openJobForm()">${svgPlus} เพิ่มตำแหน่ง</button></div><div class="stats-grid"><div class="stat-card blue"><div class="stat-card-num">${jobs.length}</div><div class="stat-card-label">ตำแหน่งทั้งหมด</div></div><div class="stat-card green"><div class="stat-card-num">${jobs.filter(j=>j.status==='open').length}</div><div class="stat-card-label">เปิดรับสมัคร</div></div><div class="stat-card purple"><div class="stat-card-num">${apps.length}</div><div class="stat-card-label">ใบสมัครทั้งหมด</div></div><div class="stat-card cyan"><div class="stat-card-num">${apps.filter(a=>a.status==='review').length}</div><div class="stat-card-label">รอพิจารณา</div></div></div><div class="admin-table-wrap"><table><thead><tr><th>ตำแหน่งงาน</th><th>แผนก</th><th>สถานที่</th><th>สถานะ</th><th>โพสต์เมื่อ</th><th>จัดการ</th></tr></thead><tbody>${jobs.map(j=>`<tr><td><strong>${j.title}</strong></td><td><span class="badge badge-dept">${j.dept}</span></td><td>${j.location}</td><td><span class="status-dot ${j.status}">${j.status==='open'?'เปิดรับสมัคร':'ปิดรับสมัคร'}</span></td><td>${ago(j.posted)}</td><td><div class="td-actions"><button class="btn btn-sm btn-secondary" onclick="openJobForm(${j.id})">แก้ไข</button><button class="btn btn-sm btn-danger" onclick="deleteJob(${j.id})">ลบ</button></div></td></tr>`).join('')}</tbody></table></div></div></div>`;
-}
-window.deleteJob=function(id){if(!confirm('ยืนยันลบตำแหน่งนี้?'))return;DB.jobs=DB.jobs.filter(j=>j.id!==id);renderAdmin();toast('ลบตำแหน่งแล้ว','warning')};
-window.openJobForm=function(id){
-  const j=id?DB.jobs.find(x=>x.id===id):null;
-  document.getElementById('modal-box').innerHTML=`<h2>${j?'แก้ไขตำแหน่งงาน':'เพิ่มตำแหน่งงานใหม่'}</h2><div class="form-grid"><div class="form-group"><label>ชื่อตำแหน่ง *</label><input id="mj-t" value="${j?j.title:''}" placeholder="เช่น Senior Developer"/></div><div class="form-group"><label>แผนก</label><input id="mj-d" value="${j?j.dept:''}" placeholder="Engineering"/></div><div class="form-group"><label>รูปแบบงาน</label><select id="mj-ty"><option${!j||j.type==='Full-time'?' selected':''}>Full-time</option><option${j&&j.type==='Part-time'?' selected':''}>Part-time</option><option${j&&j.type==='Contract'?' selected':''}>Contract</option></select></div><div class="form-group"><label>สถานที่</label><input id="mj-l" value="${j?j.location:''}" placeholder="กรุงเทพฯ / Remote"/></div><div class="form-group"><label>เงินเดือน</label><input id="mj-s" value="${j?j.salary:''}" placeholder="50,000 – 80,000"/></div><div class="form-group"><label>สถานะ</label><select id="mj-st"><option value="open"${!j||j.status==='open'?' selected':''}>เปิดรับสมัคร</option><option value="closed"${j&&j.status==='closed'?' selected':''}>ปิดรับสมัคร</option></select></div><div class="form-group full"><label>สรุปย่อ</label><textarea id="mj-sum" rows="2">${j?j.summary:''}</textarea></div><div class="form-group full"><label>รายละเอียดงาน</label><textarea id="mj-desc" rows="5">${j?j.description:''}</textarea></div><div class="form-group full"><label>คุณสมบัติ</label><textarea id="mj-req" rows="4">${j?j.requirements||'':''}</textarea></div><div class="form-group full"><label>ทักษะ (คั่นด้วยจุลภาค)</label><input id="mj-sk" value="${j?(j.skills||[]).join(', '):''}" placeholder="React, TypeScript"/></div></div><div class="form-actions"><button class="btn btn-secondary" onclick="closeModal()">ยกเลิก</button><button class="btn btn-primary" onclick="saveJob(${id||'null'})">${j?'บันทึก':'เพิ่มตำแหน่ง'}</button></div>`;
-  document.getElementById('modal-overlay').classList.add('open');
+
+const STATUS_MAP={
+  new:{label:'ใหม่',color:'#6366f1',bg:'rgba(99,102,241,.12)'},
+  reviewing:{label:'กำลังพิจารณา',color:'#f59e0b',bg:'rgba(245,158,11,.12)'},
+  shortlisted:{label:'ผ่านคัดเลือก',color:'#06b6d4',bg:'rgba(6,182,212,.12)'},
+  interview:{label:'นัดสัมภาษณ์',color:'#8b5cf6',bg:'rgba(139,92,246,.12)'},
+  offered:{label:'เสนอตำแหน่ง',color:'#10b981',bg:'rgba(16,185,129,.12)'},
+  hired:{label:'รับเข้าทำงาน',color:'#22c55e',bg:'rgba(34,197,94,.12)'},
+  rejected:{label:'ไม่ผ่าน',color:'#ef4444',bg:'rgba(239,68,68,.12)'}
 };
-window.saveJob=function(id){
-  const title=document.getElementById('mj-t').value.trim();if(!title){toast('กรุณากรอกชื่อตำแหน่ง','error');return}
-  const data={title,dept:document.getElementById('mj-d').value,type:document.getElementById('mj-ty').value,location:document.getElementById('mj-l').value,salary:document.getElementById('mj-s').value,status:document.getElementById('mj-st').value,summary:document.getElementById('mj-sum').value,description:document.getElementById('mj-desc').value,requirements:document.getElementById('mj-req').value,skills:document.getElementById('mj-sk').value.split(',').map(s=>s.trim()).filter(Boolean),posted:new Date().toISOString().slice(0,10)};
-  const jobs=DB.jobs;if(id){const i=jobs.findIndex(j=>j.id===id);if(i>-1)jobs[i]={...jobs[i],...data}}else{data.id=Date.now();jobs.push(data)}
-  DB.jobs=jobs;closeModal();renderAdmin();toast(id?'แก้ไขสำเร็จ!':'เพิ่มตำแหน่งสำเร็จ! 🎉');
+
+async function renderAdmin(){
+  const adminEl=document.getElementById('page-admin');
+  adminEl.innerHTML=`<div class="admin-layout"><aside class="admin-sidebar"><div class="sidebar-title">เมนู Admin</div><button class="sidebar-btn active" onclick="renderAdmin()">👥 ผู้สมัครงาน</button><button class="sidebar-btn" onclick="navigate('home')">🏠 หน้าหลัก</button><button class="sidebar-btn" style="color:var(--red);margin-top:auto" onclick="adminLogout()">🚪 ออกจากระบบ</button></aside><div class="admin-content"><div class="admin-header"><h2>👥 ผู้สมัครงาน</h2><button class="btn btn-secondary" onclick="renderAdmin()">🔄 รีเฟรช</button></div><div class="stats-grid" id="ad-stats"><div class="stat-card blue"><div class="stat-card-num">—</div><div class="stat-card-label">ผู้สมัครทั้งหมด</div></div><div class="stat-card green"><div class="stat-card-num">—</div><div class="stat-card-label">ตำแหน่งเปิดรับ</div></div><div class="stat-card purple"><div class="stat-card-num">—</div><div class="stat-card-label">ใบสมัครใหม่</div></div><div class="stat-card cyan"><div class="stat-card-num">—</div><div class="stat-card-label">รอสัมภาษณ์</div></div></div><div id="ad-filter" style="margin-bottom:20px;display:flex;gap:12px;flex-wrap:wrap"><select id="af-status" onchange="filterApplicants()" style="padding:8px 14px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);border-radius:var(--r2);font-family:inherit"><option value="">ทุกสถานะ</option><option value="new">ใหม่</option><option value="reviewing">กำลังพิจารณา</option><option value="shortlisted">ผ่านคัดเลือก</option><option value="interview">นัดสัมภาษณ์</option><option value="offered">เสนอตำแหน่ง</option><option value="hired">รับเข้าทำงาน</option><option value="rejected">ไม่ผ่าน</option></select><input id="af-search" type="text" placeholder="ค้นหาชื่อ/อีเมล..." oninput="filterApplicants()" style="padding:8px 14px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);border-radius:var(--r2);font-family:inherit;flex:1;min-width:200px"/></div><div id="ad-list"><div class="empty-state"><div class="empty-icon">⏳</div><h3>กำลังโหลดข้อมูล...</h3></div></div></div></div>`;
+
+  try{
+    const apRes=await fetch(SUPABASE_URL+'/rest/v1/applicants?select=*,jobs(title,department)&order=applied_at.desc',{
+      headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}
+    });
+    if(!apRes.ok)throw new Error(await apRes.text());
+    window._adminApps=await apRes.json();
+
+    const jobRes=await fetch(SUPABASE_URL+'/rest/v1/jobs?select=id,title,status',{
+      headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}
+    });
+    const jobs=jobRes.ok?await jobRes.json():[];
+
+    const stats=document.getElementById('ad-stats');
+    if(stats){
+      const apps=window._adminApps;
+      stats.innerHTML=`
+        <div class="stat-card blue"><div class="stat-card-num">${apps.length}</div><div class="stat-card-label">ผู้สมัครทั้งหมด</div></div>
+        <div class="stat-card green"><div class="stat-card-num">${jobs.filter(j=>j.status==='open').length}</div><div class="stat-card-label">ตำแหน่งเปิดรับ</div></div>
+        <div class="stat-card purple"><div class="stat-card-num">${apps.filter(a=>a.status==='new').length}</div><div class="stat-card-label">ใบสมัครใหม่</div></div>
+        <div class="stat-card cyan"><div class="stat-card-num">${apps.filter(a=>a.status==='interview').length}</div><div class="stat-card-label">รอสัมภาษณ์</div></div>`;
+    }
+    filterApplicants();
+  }catch(err){
+    console.error('[Admin]',err);
+    document.getElementById('ad-list').innerHTML=`<div class="empty-state"><div class="empty-icon">⚠️</div><h3>โหลดข้อมูลไม่สำเร็จ</h3><p class="text-muted">${err.message}</p></div>`;
+  }
+}
+
+window.filterApplicants=function(){
+  const apps=window._adminApps||[];
+  const sf=document.getElementById('af-status')?.value||'';
+  const sq=(document.getElementById('af-search')?.value||'').toLowerCase();
+  let filtered=apps;
+  if(sf)filtered=filtered.filter(a=>a.status===sf);
+  if(sq)filtered=filtered.filter(a=>(a.full_name||'').toLowerCase().includes(sq)||(a.email||'').toLowerCase().includes(sq));
+  renderApplicantList(filtered);
+};
+
+function renderApplicantList(apps){
+  const el=document.getElementById('ad-list');
+  if(!el)return;
+  if(!apps.length){
+    el.innerHTML=`<div class="empty-state"><div class="empty-icon">📭</div><h3>ไม่พบข้อมูลผู้สมัคร</h3><p class="text-muted">ยังไม่มีใบสมัครในระบบ</p></div>`;
+    return;
+  }
+  const statusOpts=Object.entries(STATUS_MAP).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
+  el.innerHTML=`<div class="admin-table-wrap"><table><thead><tr><th>ผู้สมัคร</th><th>ตำแหน่ง</th><th>วันที่สมัคร</th><th>สถานะ</th><th>Resume</th><th>จัดการ</th></tr></thead><tbody>${apps.map(a=>{
+    const st=STATUS_MAP[a.status]||STATUS_MAP.new;
+    const jobName=a.jobs?a.jobs.title:'—';
+    const dept=a.jobs?a.jobs.department:'';
+    const dt=a.applied_at?new Date(a.applied_at).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}):'—';
+    return `<tr>
+      <td><div style="font-weight:600">${a.full_name||'—'}</div><div style="font-size:.8rem;color:var(--text3)">${a.email||''}</div><div style="font-size:.78rem;color:var(--text3)">${a.phone||''}</div></td>
+      <td><span class="badge badge-dept">${jobName}</span>${dept?`<div style="font-size:.75rem;color:var(--text3);margin-top:4px">${dept}</div>`:''}</td>
+      <td style="font-size:.85rem;color:var(--text2)">${dt}</td>
+      <td><select onchange="updateStatus('${a.id}',this.value)" style="padding:5px 10px;background:${st.bg};color:${st.color};border:1px solid ${st.color}33;border-radius:100px;font-size:.78rem;font-weight:600;font-family:inherit;cursor:pointer">${statusOpts.replace(`value="${a.status}"`,`value="${a.status}" selected`)}</select></td>
+      <td>${a.resume_path?`<button class="btn btn-sm btn-secondary" onclick="downloadResume('${a.id}','${a.resume_path}','${(a.resume_filename||'resume.pdf').replace(/'/g,"\\'")}')">📄 ดาวน์โหลด</button>`:'<span style="color:var(--text3);font-size:.8rem">ไม่มีไฟล์</span>'}</td>
+      <td><button class="btn btn-sm btn-primary" onclick="viewApplicant('${a.id}')">👁 ดู</button></td>
+    </tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+
+window.updateStatus=async function(id,status){
+  try{
+    const res=await fetch(SUPABASE_URL+'/rest/v1/applicants?id=eq.'+id,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'},
+      body:JSON.stringify({status})
+    });
+    if(!res.ok)throw new Error(await res.text());
+    const app=window._adminApps.find(a=>a.id===id);
+    if(app)app.status=status;
+    toast('อัปเดตสถานะเรียบร้อย ✅');
+  }catch(err){
+    toast('อัปเดตไม่สำเร็จ: '+err.message,'error');
+  }
+};
+
+window.downloadResume=async function(id,path,filename){
+  try{
+    const res=await fetch(SUPABASE_URL+'/storage/v1/object/sign/resumes/'+path,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON},
+      body:JSON.stringify({expiresIn:3600})
+    });
+    if(!res.ok)throw new Error('ไม่สามารถสร้าง URL ดาวน์โหลดได้');
+    const data=await res.json();
+    const url=SUPABASE_URL+'/storage/v1'+data.signedURL;
+    const a=document.createElement('a');
+    a.href=url;a.download=filename;a.target='_blank';
+    document.body.appendChild(a);a.click();a.remove();
+    toast('กำลังดาวน์โหลด Resume... 📄');
+  }catch(err){
+    toast(err.message,'error');
+  }
+};
+
+window.viewApplicant=function(id){
+  const a=(window._adminApps||[]).find(x=>x.id===id);
+  if(!a)return;
+  const st=STATUS_MAP[a.status]||STATUS_MAP.new;
+  const jobName=a.jobs?a.jobs.title:'—';
+  const dept=a.jobs?a.jobs.department:'';
+  const dt=a.applied_at?new Date(a.applied_at).toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+  document.getElementById('modal-box').innerHTML=`
+    <h2>📋 ข้อมูลผู้สมัคร</h2>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
+      <div style="width:52px;height:52px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:1.3rem;flex-shrink:0">${(a.full_name||'?').charAt(0).toUpperCase()}</div>
+      <div>
+        <div style="font-size:1.1rem;font-weight:700">${a.full_name||'—'}</div>
+        <div style="color:var(--text3);font-size:.85rem">สมัครเมื่อ ${dt}</div>
+      </div>
+      <span style="margin-left:auto;padding:4px 12px;border-radius:100px;font-size:.78rem;font-weight:600;background:${st.bg};color:${st.color};border:1px solid ${st.color}33">${st.label}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+      <div class="info-card" style="padding:14px">
+        <div style="font-size:.75rem;color:var(--text3);margin-bottom:4px">อีเมล</div>
+        <div style="font-weight:600">${a.email||'—'}</div>
+      </div>
+      <div class="info-card" style="padding:14px">
+        <div style="font-size:.75rem;color:var(--text3);margin-bottom:4px">เบอร์โทร</div>
+        <div style="font-weight:600">${a.phone||'—'}</div>
+      </div>
+      <div class="info-card" style="padding:14px">
+        <div style="font-size:.75rem;color:var(--text3);margin-bottom:4px">ตำแหน่งที่สมัคร</div>
+        <div style="font-weight:600">${jobName}${dept?' ('+dept+')':''}</div>
+      </div>
+      <div class="info-card" style="padding:14px">
+        <div style="font-size:.75rem;color:var(--text3);margin-bottom:4px">LinkedIn / Portfolio</div>
+        <div style="font-weight:600">${a.linkedin_url?'<a href="'+a.linkedin_url+'" target="_blank" style="color:var(--accent)">เปิดลิงก์</a>':'—'}</div>
+      </div>
+    </div>
+    ${a.cover_letter?`<div style="margin-bottom:20px"><div style="font-size:.85rem;font-weight:600;color:var(--text2);margin-bottom:8px">แนะนำตัว / Cover Letter</div><div style="background:var(--bg2);padding:16px;border-radius:var(--r2);border:1px solid var(--border2);color:var(--text2);font-size:.9rem;line-height:1.7;white-space:pre-wrap">${a.cover_letter}</div></div>`:''}
+    <div class="form-actions">
+      ${a.resume_path?`<button class="btn btn-success" onclick="downloadResume('${a.id}','${a.resume_path}','${(a.resume_filename||'resume.pdf').replace(/'/g,"\\'")}')">📄 ดาวน์โหลด Resume</button>`:''}
+      <button class="btn btn-secondary" onclick="closeModal()">ปิด</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
 };
 
 if(!DB.jobs.length){DB.jobs=[{id:1,title:'Senior Frontend Developer',dept:'Engineering',type:'Full-time',location:'กรุงเทพฯ',salary:'80,000 – 120,000',status:'open',posted:'2026-05-10',summary:'พัฒนา UI/UX ระดับ Enterprise ด้วย React และ TypeScript',description:'พัฒนา UI components ด้วย React + TypeScript\nร่วมออกแบบ architecture กับทีม Backend',requirements:'ประสบการณ์ React อย่างน้อย 3 ปี\nมีความรู้ TypeScript และ REST API',skills:['React','TypeScript','GraphQL','Git']},{id:2,title:'Product Manager',dept:'Product',type:'Full-time',location:'Hybrid',salary:'90,000 – 150,000',status:'open',posted:'2026-05-12',summary:'กำหนดทิศทางผลิตภัณฑ์ เขียน PRD และ roadmap รายไตรมาส',description:'กำหนด Product Vision และ Strategy\nวิเคราะห์ข้อมูลผู้ใช้และตลาด',requirements:'ประสบการณ์ PM อย่างน้อย 3 ปี\nเข้าใจ Agile / Scrum',skills:['Agile','SQL','Figma','JIRA']},{id:3,title:'UX/UI Designer',dept:'Design',type:'Full-time',location:'กรุงเทพฯ',salary:'60,000 – 90,000',status:'open',posted:'2026-05-08',summary:'ออกแบบประสบการณ์ผู้ใช้ที่สวยงามสำหรับ web และ mobile',description:'Research และ understand user needs\nสร้าง wireframe, prototype และ final UI',requirements:'ประสบการณ์ UX/UI อย่างน้อย 2 ปี\nเชี่ยวชาญ Figma',skills:['Figma','Prototyping','User Research','Design System']}]}

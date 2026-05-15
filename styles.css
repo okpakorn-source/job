@@ -1314,3 +1314,23 @@ tr:hover td {
   color: var(--text2);
   line-height: 1.7
 }
+
+/* Admin table responsive */
+@media(max-width:900px) {
+  .admin-table-wrap { overflow-x: auto }
+  .admin-table-wrap table { min-width: 700px }
+}
+
+.admin-table-wrap td select {
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  text-align: center
+}
+
+.admin-table-wrap td select:focus {
+  box-shadow: 0 0 0 2px rgba(99,102,241,.3)
+}
+
+tr { transition: background .15s }
+tr:hover td { background: rgba(99,102,241,.03) }
