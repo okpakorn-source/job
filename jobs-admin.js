@@ -189,17 +189,39 @@ window.toggleJobStatus=async function(id,newStatus){
 };
 
 window.deleteJob=async function(id,title){
-  if(!confirm('ลบตำแหน่ง "'+title+'" ?\n\n⚠️ ใบสมัครที่เกี่ยวข้องจะไม่ถูกลบ'))return;
+  if(!confirm('ลบตำแหน่ง "'+title+'" ?\n\n⚠️ ใบสมัครที่เกี่ยวข้องจะยังอยู่'))return;
   try{
+    // Step 1: ปลด foreign key — set job_id=null ในใบสมัครที่อ้างถึง job นี้
+    await fetch(SUPABASE_URL+'/rest/v1/applicants?job_id=eq.'+id,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'},
+      body:JSON.stringify({job_id:null})
+    });
+    // Step 2: ลบ job
     const res=await fetch(SUPABASE_URL+'/rest/v1/jobs?id=eq.'+id,{
       method:'DELETE',
-      headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'}
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'}
     });
-    if(!res.ok)throw new Error(await res.text());
-    toast('ลบตำแหน่งแล้ว');
+    if(!res.ok){
+      // Fallback: soft delete — เปลี่ยน status เป็น closed
+      console.warn('[DELETE JOB] Hard delete failed, trying soft delete...');
+      const res2=await fetch(SUPABASE_URL+'/rest/v1/jobs?id=eq.'+id,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'},
+        body:JSON.stringify({status:'closed',title:'[ลบแล้ว] '+title})
+      });
+      if(!res2.ok)throw new Error('ลบไม่ได้');
+      toast('ปิดตำแหน่ง "'+title+'" แล้ว (soft delete) ✅');
+    }else{
+      toast('ลบตำแหน่ง "'+title+'" แล้ว ✅');
+    }
     window._adminJobs=null;
+    window._sbJobs=[];
     renderJobManager();
-  }catch(err){toast('Error: '+err.message,'error')}
+  }catch(err){
+    console.error('[DELETE JOB]',err);
+    toast('Error: '+err.message,'error');
+  }
 };
 
 window.deleteApplicant=async function(id,name){

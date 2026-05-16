@@ -14,7 +14,7 @@ async function renderHome(){
   renderCards();
 }
 window.renderCards=function(){
-  let jobs=_sbJobs;
+  let jobs=_sbJobs.filter(j=>j.status==='open');
   if(q)jobs=jobs.filter(j=>(j.title||'').toLowerCase().includes(q.toLowerCase())||(j.department||'').toLowerCase().includes(q.toLowerCase()));
   if(fd)jobs=jobs.filter(j=>j.department===fd);
   if(ft)jobs=jobs.filter(j=>j.type===ft);
