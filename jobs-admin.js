@@ -9,11 +9,9 @@ window.renderJobManager=function(){
 };
 
 async function loadJobsData(){
-  const res=await fetch(SUPABASE_URL+'/rest/v1/jobs?select=*&order=posted_at.desc',{
-    headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}
-  });
-  const jobs=res.ok?await res.json():[];
-  window._adminJobs=jobs;
+  const {data:jobs,error}=await sb.from('jobs').select('*').neq('status','deleted').order('posted_at',{ascending:false});
+  if(error)console.error('[LOAD JOBS]',error);
+  window._adminJobs=jobs||[];
   const el=document.getElementById('admin-main');
   const open=jobs.filter(j=>j.status==='open').length;
   const salDisplay=j=>j.salary?j.salary:j.salary_min?'฿'+j.salary_min.toLocaleString()+(j.salary_max?'–฿'+j.salary_max.toLocaleString():''):'';
@@ -176,12 +174,9 @@ window.saveJob=async function(editId){
 
 window.toggleJobStatus=async function(id,newStatus){
   try{
-    const res=await fetch(SUPABASE_URL+'/rest/v1/jobs?id=eq.'+id,{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'},
-      body:JSON.stringify({status:newStatus})
-    });
-    if(!res.ok)throw new Error(await res.text());
+    const {data,error}=await sb.from('jobs').update({status:newStatus}).eq('id',id).select();
+    if(error)throw error;
+    if(!data||!data.length)throw new Error('ไม่พบตำแหน่งหรือไม่มีสิทธิ์แก้ไข');
     toast(newStatus==='open'?'เปิดรับสมัครแล้ว ✅':'ปิดรับสมัครแล้ว');
     window._adminJobs=null;
     renderJobManager();
@@ -189,34 +184,19 @@ window.toggleJobStatus=async function(id,newStatus){
 };
 
 window.deleteJob=async function(id,title){
-  if(!confirm('ลบตำแหน่ง "'+title+'" ?\n\n⚠️ ใบสมัครที่เกี่ยวข้องจะยังอยู่'))return;
+  if(!confirm('ลบตำแหน่ง "'+title+'" ?'))return;
   try{
-    // Step 1: ปลด foreign key — set job_id=null ในใบสมัครที่อ้างถึง job นี้
-    await fetch(SUPABASE_URL+'/rest/v1/applicants?job_id=eq.'+id,{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'},
-      body:JSON.stringify({job_id:null})
-    });
-    // Step 2: ลบ job
-    const res=await fetch(SUPABASE_URL+'/rest/v1/jobs?id=eq.'+id,{
-      method:'DELETE',
-      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'}
-    });
-    if(!res.ok){
-      // Fallback: soft delete — เปลี่ยน status เป็น closed
-      console.warn('[DELETE JOB] Hard delete failed, trying soft delete...');
-      const res2=await fetch(SUPABASE_URL+'/rest/v1/jobs?id=eq.'+id,{
-        method:'PATCH',
-        headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'},
-        body:JSON.stringify({status:'closed',title:'[ลบแล้ว] '+title})
-      });
-      if(!res2.ok)throw new Error('ลบไม่ได้');
-      toast('ปิดตำแหน่ง "'+title+'" แล้ว (soft delete) ✅');
-    }else{
-      toast('ลบตำแหน่ง "'+title+'" แล้ว ✅');
+    // ปลด foreign key — set job_id=null ในใบสมัครที่อ้าง job นี้
+    await sb.from('applicants').update({job_id:null}).eq('job_id',id);
+    // ลบจริง
+    const {error}=await sb.from('jobs').delete().eq('id',id);
+    if(error){
+      console.error('[DELETE JOB]',error);
+      throw error;
     }
     window._adminJobs=null;
     window._sbJobs=[];
+    toast('ลบตำแหน่ง "'+title+'" แล้ว ✅');
     renderJobManager();
   }catch(err){
     console.error('[DELETE JOB]',err);
@@ -225,15 +205,12 @@ window.deleteJob=async function(id,title){
 };
 
 window.deleteApplicant=async function(id,name){
-  if(!confirm('ลบใบสมัครของ "'+name+'" ?\n\nข้อมูลจะถูกลบถาวร'))return;
+  if(!confirm('ลบใบสมัครของ "'+name+'" ?'))return;
   try{
-    const res=await fetch(SUPABASE_URL+'/rest/v1/applicants?id=eq.'+id,{
-      method:'DELETE',
-      headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'}
-    });
-    if(!res.ok)throw new Error(await res.text());
+    const {error}=await sb.from('applicants').delete().eq('id',id);
+    if(error)throw error;
     window._adminApps=(window._adminApps||[]).filter(a=>a.id!==id);
-    toast('ลบใบสมัครแล้ว');
+    toast('ลบใบสมัครแล้ว ✅');
     filterApplicants();
   }catch(err){toast('Error: '+err.message,'error')}
 };

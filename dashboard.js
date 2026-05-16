@@ -17,11 +17,11 @@ function adminSidebar(active){
 async function loadAdminData(){
   if(window._adminApps&&window._adminJobs)return;
   const [apRes,jRes]=await Promise.all([
-    fetch(SUPABASE_URL+'/rest/v1/applicants?select=*,jobs(title,department,type,location)&order=applied_at.desc',{headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}}),
-    fetch(SUPABASE_URL+'/rest/v1/jobs?select=*',{headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON}})
+    sb.from('applicants').select('*,jobs(title,department,type,location)').order('applied_at',{ascending:false}),
+    sb.from('jobs').select('*').neq('status','deleted')
   ]);
-  window._adminApps=apRes.ok?await apRes.json():[];
-  window._adminJobs=jRes.ok?await jRes.json():[];
+  window._adminApps=apRes.data||[];
+  window._adminJobs=jRes.data||[];
 }
 
 function renderDashboardView(){
