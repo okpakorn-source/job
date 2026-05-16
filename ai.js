@@ -24,27 +24,31 @@ async function pdfToImages(pdfBlob,maxPages){
 
 // ─── Top 15 Thai Universities ───
 const TOP15=[
-  "จุฬาลงกรณ์","Chulalongkorn","จุฬาฯ","CU ",
-  "มหิดล","Mahidol","MU ",
-  "เชียงใหม่","Chiang Mai","CMU","มช.",
-  "ธรรมศาสตร์","Thammasat","มธ.","TU ",
-  "เกษตรศาสตร์","Kasetsart","มก.","KU ",
-  "ขอนแก่น","Khon Kaen","มข.","KKU",
-  "สงขลานครินทร์","Prince of Songkla","มอ.","PSU",
-  "ลาดกระบัง","Ladkrabang","KMITL","สจล.","สจล",
-  "พระจอมเกล้าธนบุรี","Thonburi","KMUTT","มจธ.","มจธ","บางมด",
-  "พระจอมเกล้าพระนครเหนือ","North Bangkok","KMUTNB","มจพ.","มจพ",
-  "ศรีนครินทรวิโรฒ","Srinakharinwirot","มศว","SWU",
-  "บูรพา","Burapha","BUU",
-  "แม่ฟ้าหลวง","Mae Fah Luang","MFU","มฟล",
-  "สุรนารี","Suranaree","SUT","มทส",
-  "ศิลปากร","Silpakorn","SU "
+  {rank:1,kw:["จุฬาลงกรณ์","Chulalongkorn","จุฬาฯ","CU "]},
+  {rank:2,kw:["มหิดล","Mahidol","MU "]},
+  {rank:3,kw:["เชียงใหม่","Chiang Mai","CMU","มช.","มช"]},
+  {rank:4,kw:["ธรรมศาสตร์","Thammasat","มธ.","มธ","TU "]},
+  {rank:5,kw:["เกษตรศาสตร์","Kasetsart","มก.","มก","KU "]},
+  {rank:6,kw:["ขอนแก่น","Khon Kaen","มข.","มข","KKU"]},
+  {rank:7,kw:["สงขลานครินทร์","Prince of Songkla","มอ.","มอ","PSU"]},
+  {rank:8,kw:["ลาดกระบัง","Ladkrabang","KMITL","สจล.","สจล"]},
+  {rank:9,kw:["พระจอมเกล้าธนบุรี","Thonburi","KMUTT","มจธ.","มจธ","บางมด"]},
+  {rank:10,kw:["พระจอมเกล้าพระนครเหนือ","North Bangkok","KMUTNB","มจพ.","มจพ"]},
+  {rank:11,kw:["ศรีนครินทรวิโรฒ","Srinakharinwirot","มศว","SWU"]},
+  {rank:12,kw:["บูรพา","Burapha","BUU"]},
+  {rank:13,kw:["แม่ฟ้าหลวง","Mae Fah Luang","MFU","มฟล"]},
+  {rank:14,kw:["สุรนารี","Suranaree","SUT","มทส"]},
+  {rank:15,kw:["ศิลปากร","Silpakorn","SU "]}
 ];
 
 function checkTop15(uni,uniEn){
   const s=((uni||'')+' '+(uniEn||'')).toLowerCase();
-  for(let i=0;i<TOP15.length;i++){if(s.includes(TOP15[i].toLowerCase().trim()))return true;}
-  return false;
+  for(var i=0;i<TOP15.length;i++){
+    for(var k=0;k<TOP15[i].kw.length;k++){
+      if(s.includes(TOP15[i].kw[k].toLowerCase().trim()))return TOP15[i].rank;
+    }
+  }
+  return 0;
 }
 
 function gpaLevel(g){
@@ -93,18 +97,17 @@ window.analyzeResume=async function(id,promptId){
     const r=JSON.parse((await aiRes.json()).choices[0].message.content);
 
     // ─── Local verification & auto-mark ───
-    const isTop15=checkTop15(r.university,r.university_en);
+    const uniRank=checkTop15(r.university,r.university_en);
     const gpa=Number(r.gpa)||0;
     const gpaOk=gpa>=3.00;
-    // Auto upgrade to star if criteria met
     let rating=r.rating||'normal';
     const marks=[];
-    if(isTop15){marks.push('🏫 มหาวิทยาลัย Top 15');if(rating!=='star')rating='star';}
-    if(gpaOk){marks.push('📊 GPA '+gpa.toFixed(2)+' ('+gpaLevel(gpa)+')');if(rating!=='star')rating='star';}
-    r._rating=rating;r._isTop15=isTop15;r._gpaOk=gpaOk;r._gpaLevel=gpaLevel(gpa);r._marks=marks;
+    if(uniRank>0){marks.push('🏫 Top '+uniRank);rating='star';}
+    if(gpaOk){marks.push('📊 GPA '+gpa.toFixed(2)+' ('+gpaLevel(gpa)+')');rating='star';}
+    r._rating=rating;r._uniRank=uniRank;r._gpaOk=gpaOk;r._gpaLevel=gpaLevel(gpa);r._marks=marks;
 
     const rc=RC[rating]||RC.normal;
-    console.log('[AI]',{name:r.name,rating,isTop15,gpa,marks});
+    console.log('[AI]',{name:r.name,rating,uniRank,gpa,marks});
 
     await sb.from('applicants').update({
       ai_analyzed:true,ai_analyzed_at:new Date().toISOString(),ai_summary:r,
@@ -124,10 +127,10 @@ window.renderAIResults=function(a){
   const rating=r._rating||r.rating||'normal';
   const rc=RC[rating]||RC.normal;
   const gpa=Number(r.gpa)||0;
-  const isTop15=r._isTop15||checkTop15(r.university,r.university_en);
+  const uniRank=r._uniRank||checkTop15(r.university,r.university_en);
   const gpaOk=r._gpaOk||(gpa>=3.00);
   const marks=r._marks||[];
-  if(!marks.length){if(isTop15)marks.push('🏫 มหาวิทยาลัย Top 15');if(gpaOk)marks.push('📊 GPA '+gpa.toFixed(2));}
+  if(!marks.length){if(uniRank>0)marks.push('🏫 Top '+uniRank);if(gpaOk)marks.push('📊 GPA '+gpa.toFixed(2));}
 
   var h='<div style="margin-bottom:20px;border:2px solid '+rc.color+'44;border-radius:var(--r);overflow:hidden">';
 
@@ -158,11 +161,11 @@ window.renderAIResults=function(a){
   h+='</div>';
 
   // University card
-  h+='<div style="background:var(--bg2);border-radius:var(--r2);padding:16px;margin-bottom:12px;border-left:4px solid '+(isTop15?'#22c55e':'var(--border2)')+'">';
+  h+='<div style="background:var(--bg2);border-radius:var(--r2);padding:16px;margin-bottom:12px;border-left:4px solid '+(uniRank>0?'#22c55e':'var(--border2)')+'">';
   h+='<div style="font-size:.75rem;color:var(--text3);margin-bottom:4px">🏫 มหาวิทยาลัย</div>';
   h+='<div style="font-size:1.1rem;font-weight:700;margin-bottom:4px">'+(r.university||r.university_en||'ไม่ระบุ')+'</div>';
   if(r.university_en&&r.university)h+='<div style="font-size:.82rem;color:var(--text3);margin-bottom:6px">'+r.university_en+'</div>';
-  if(isTop15)h+='<span style="display:inline-block;padding:4px 14px;border-radius:100px;font-size:.8rem;font-weight:700;background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.25)">🏆 Top 15 มหาวิทยาลัยไทย</span>';
+  if(uniRank>0)h+='<span style="display:inline-block;padding:4px 14px;border-radius:100px;font-size:.8rem;font-weight:700;background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.25)">🏆 Top '+uniRank+' มหาวิทยาลัยไทย</span>';
   if(r.degree||r.major)h+='<div style="margin-top:8px;font-size:.85rem;color:var(--text2)">📚 '+(r.degree||'')+' '+(r.major||'')+'</div>';
   h+='</div>';
 
