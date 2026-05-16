@@ -14,7 +14,7 @@ async function loadJobsData(){
   window._adminJobs=jobs||[];
   const el=document.getElementById('admin-main');
   const open=jobs.filter(j=>j.status==='open').length;
-  const salDisplay=j=>j.salary?j.salary:j.salary_min?'฿'+j.salary_min.toLocaleString()+(j.salary_max?'–฿'+j.salary_max.toLocaleString():''):'';
+  const salDisplay=j=>j.salary_min?'฿'+j.salary_min.toLocaleString()+(j.salary_max&&j.salary_max!==j.salary_min?'–฿'+j.salary_max.toLocaleString():''):'';
   el.innerHTML=`
     <div class="admin-header"><h2>📋 จัดการตำแหน่งงาน</h2><button class="btn btn-primary btn-sm" onclick="showJobForm()">+ เพิ่มตำแหน่งใหม่</button></div>
     <div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));margin-bottom:20px">
@@ -71,7 +71,8 @@ window.showJobForm=function(editId){
   const jobs=window._adminJobs||[];
   const j=editId?jobs.find(x=>x.id==editId):null;
   const isEdit=!!j;
-  const salVal=j?(j.salary||(j.salary_min?j.salary_min+(j.salary_max?'-'+j.salary_max:''):'')):'';
+  const salVal=j?(j.salary_min?(j.salary_min+(j.salary_max&&j.salary_max!==j.salary_min?'-'+j.salary_max:'')):''):'';
+
   document.getElementById('modal-box').innerHTML=`
     <h2>${isEdit?'✏️ แก้ไขตำแหน่ง':'+ เพิ่มตำแหน่งใหม่'}</h2>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -131,12 +132,21 @@ window.saveJob=async function(editId){
   const reqHtml=_quillReq?_quillReq.root.innerHTML:'';
   const benefitsHtml=_quillBenefits?_quillBenefits.root.innerHTML:'';
   const detailHtml=_quillDetail?_quillDetail.root.innerHTML:'';
+  // Parse salary: "50000-80000" → salary_min=50000, salary_max=80000
+  const salRaw=document.getElementById('jf-salary').value.trim();
+  let salary_min=null,salary_max=null;
+  if(salRaw){
+    const parts=salRaw.replace(/[฿,\s]/g,'').split(/[-–]/);
+    salary_min=parseInt(parts[0])||null;
+    salary_max=parts[1]?parseInt(parts[1]):salary_min;
+  }
   const payload={
     title,
     department:document.getElementById('jf-dept').value.trim(),
     type:document.getElementById('jf-type').value,
     location:document.getElementById('jf-loc').value.trim(),
-    salary:document.getElementById('jf-salary').value.trim(),
+    salary_min,
+    salary_max,
     status:document.getElementById('jf-status').value,
     summary:document.getElementById('jf-summary').value.trim(),
     description:descHtml==='<p><br></p>'?'':descHtml,
@@ -148,27 +158,21 @@ window.saveJob=async function(editId){
     posted_at:new Date().toISOString()
   };
   try{
-    let res;
+    let error;
     if(editId){
-      res=await fetch(SUPABASE_URL+'/rest/v1/jobs?id=eq.'+editId,{
-        method:'PATCH',
-        headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'},
-        body:JSON.stringify(payload)
-      });
+      ({error}=await sb.from('jobs').update(payload).eq('id',editId));
     }else{
-      res=await fetch(SUPABASE_URL+'/rest/v1/jobs',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON,'Prefer':'return=minimal'},
-        body:JSON.stringify(payload)
-      });
+      ({error}=await sb.from('jobs').insert([payload]));
     }
-    if(!res.ok)throw new Error(await res.text());
+    if(error)throw error;
     closeModal();
     toast(editId?'อัปเดตตำแหน่งเรียบร้อย ✅':'เพิ่มตำแหน่งใหม่เรียบร้อย ✅');
     window._adminJobs=null;
+    window._sbJobs=[];
     renderJobManager();
   }catch(err){
-    toast('Error: '+err.message,'error');
+    console.error('[SAVE JOB]',err);
+    toast('Error: '+(err.message||JSON.stringify(err)),'error');
   }
 };
 
